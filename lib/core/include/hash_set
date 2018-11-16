@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -26,18 +26,18 @@ namespace pm {
 template <typename Key, typename... TParams>
 class hash_set
    : public std::unordered_set<Key, hash_func<Key>, typename hash_table_cmp_adapter<Key, TParams...>::type> {
-   typedef std::unordered_set<Key, hash_func<Key>, typename hash_table_cmp_adapter<Key, TParams...>::type> _super;
+   typedef std::unordered_set<Key, hash_func<Key>, typename hash_table_cmp_adapter<Key, TParams...>::type> base_t;
 public:
    hash_set() {}
-   explicit hash_set(size_t start_cap) : _super(start_cap) {}
+   explicit hash_set(size_t start_cap) : base_t(start_cap) {}
 
    template <typename Iterator>
-   hash_set(Iterator first, Iterator last) : _super(first, last) {}
+   hash_set(Iterator first, Iterator last) : base_t(first, last) {}
 
    template <typename Container,
              typename enabled=typename std::enable_if<isomorphic_to_container_of<Container, Key, allow_conversion>::value>::type>
    explicit hash_set(const Container& src)
-      : _super(src.begin(), src.end()) {}
+      : base_t(src.begin(), src.end()) {}
 
    // let's make it at least partially compatible with Set
 
@@ -69,7 +69,7 @@ public:
 
    hash_set& operator^= (const Key& k)
    {
-      std::pair<typename _super::iterator, bool> inserted=this->insert(k);
+      auto inserted=this->insert(k);
       if (!inserted.second) this->erase(inserted.first);
       return *this;
    }
@@ -89,21 +89,6 @@ public:
    {
       return !this->insert(k).second;
    }
-
-   const Key& front() const
-   {
-      return *(this->begin());
-   }
-
-   bool operator== (const hash_set& other) const
-   {
-      if (this->size() != other.size()) return false;
-      typename _super::const_iterator not_found=this->end();
-      for (typename _super::const_iterator elem=other.begin(), other_end=other.end(); elem != other_end; ++elem)
-         if (this->find(*elem) == not_found)
-            return false;
-      return true;
-   }
 };
 
 template <typename Key, typename... TParams>
@@ -120,6 +105,11 @@ struct spec_object_traits< hash_set<Key, TParams...> >
    : spec_object_traits<is_container> {
    static const IO_separator_kind IO_separator=IO_sep_inherit;
 };
+
+// can't be used as a search key in Set or Map!
+template <typename Key, typename... TParams>
+struct is_ordered< hash_set<Key, TParams...> >
+   : std::false_type { };
 
 } // end namespace pm
 

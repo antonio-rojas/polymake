@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -20,122 +20,132 @@
 #include "polymake/PowerSet.h"
 #include "polymake/Matrix.h"
 #include "polymake/ListMatrix.h"
-#include "polymake/Rational.h"
+#include "polymake/SparseVector.h"
 #include "polymake/Array.h"
 #include "polymake/linalg.h"
 #include <fstream>
 
 namespace polymake { namespace polytope {
 
+namespace {    
 
-template <typename Scalar, typename SetInt>
-std::pair< const Matrix<Scalar>,const Matrix<Scalar> > secondary_cone_ineq(const Matrix<Scalar> &verts,const Array<SetInt>& subdiv,perl::OptionSet options)
+template<typename Scalar, typename SetInt, typename Matrix>
+SparseVector<Scalar>
+new_row(int i,
+        const GenericMatrix<Matrix,Scalar>& vertices,
+        const SetInt& basis,
+        int basis_sign,
+        Scalar basis_det)
 {
+   SparseVector<Scalar> new_row(vertices.rows());
+   int s = basis_sign;
+   new_row[i] = s * basis_det;
+   for (const auto& k: basis) {
+      s=-s;
+      new_row[k] = s * det(vertices[i] / vertices.minor(basis-scalar2set(k), All));
+   }
+   return new_row;
+}	
+  
+} // end anonymous namespace
 
-   const int n_vertices=verts.rows();
-   const int ambient_dim=verts.cols()-1;
-   const int n_facets=subdiv.size();
+template<typename Scalar, typename TMatrix>
+Matrix<Scalar>
+full_dim_projection(const GenericMatrix<TMatrix,Scalar>& verts)
+{
+   const int ambient_dim = verts.cols()-1;
+   const auto affine_hull = null_space(verts);
+   const int codim = affine_hull.rows();
+   if (!codim)
+      return verts;
+   for (auto i=entire(all_subsets_of_k(sequence(0,ambient_dim),codim)); !i.at_end(); ++i)
+      if (!is_zero(det(affine_hull.minor(All, *i))))
+         return verts.minor(All, ~(Set<int>(*i)));
+
+   throw std::runtime_error("full_dim_projection: This shouldn't happen");
+}
+      
+template<typename Scalar, typename SetInt, typename Matrix>
+std::pair<const SparseMatrix<Scalar>, const SparseMatrix<Scalar>>
+secondary_cone_ineq(const GenericMatrix<Matrix,Scalar> &full_dim_verts, const Array<SetInt>& subdiv, perl::OptionSet options)
+{
+#if POLYMAKE_DEBUG
+   if (rank(full_dim_verts) != full_dim_verts.cols())
+      throw std::runtime_error("secondary_cone_ineq: need full-dimensional vertices. Use full_dim_projection on your vertices first.");
+#endif
+
+   const int n_vertices  = full_dim_verts.rows();
+   const int ambient_dim = full_dim_verts.cols()-1;
+   const int n_facets    = subdiv.size();
 
    //compute the set of all points that is not used in any face
    SetInt not_used(sequence(0,n_vertices));
-   for (int i=0; i<n_facets; ++i)
-      not_used-=subdiv[i];
-
-   //compute a full-dimensional orthogonal projection if verts is not full_dimensional
-   const Matrix<Scalar> affine_hull=null_space(verts);
-   const int codim=affine_hull.rows();
-   SetInt coords;
-   for (auto i=entire(all_subsets_of_k(sequence(0,ambient_dim),codim)); !i.at_end(); ++i) {
-     if (!is_zero(det(affine_hull.minor(All, *i)))) {
-       coords=*i;
-       break;
-     }
-   }
-   const Matrix<Scalar> vertices=verts.minor(All,~coords);  
-   const int dim=vertices.cols()-1;
+   for (const auto& sd: subdiv)
+      not_used -= sd;
 
    // the equations and inequalities for the possible weight vectors
    // (without right hand side which will be 0)
-   ListMatrix<Vector<Scalar> > equats(0,n_vertices);
-   ListMatrix<Vector<Scalar> > inequs(0,n_vertices);
+   ListMatrix<SparseVector<Scalar>> equats(0,n_vertices);
+   ListMatrix<SparseVector<Scalar>> inequs(0,n_vertices);
 
-   Matrix<Scalar> eqs;
-   if (options["equations"]>> eqs) equats/=eqs;
+   SparseMatrix<Scalar> eqs;
+   if (options["equations"] >> eqs)
+      equats /= eqs;
+
    Set<int> tozero = options["lift_to_zero"];
    int face;
-   if (!equats.rows() &&tozero.empty() && options["lift_face_to_zero"]>>face) {
-      tozero+=subdiv[face];
-   }
-   for(typename Entire<Set<int> >::const_iterator j=entire(tozero);!j.at_end();++j)
-      equats/=unit_vector<Scalar>(n_vertices,*j);
+   if (!equats.rows() && tozero.empty() && options["lift_face_to_zero"]>>face)
+      tozero += subdiv[face];
+
+   for (const auto& j: tozero)
+      equats /= unit_vector<Scalar>(n_vertices,j);
 
 
-   //now we start generating the equation and inequalities
-   for (int i=0; i<n_facets; ++i) {
-      const SetInt b(basis_rows(vertices.minor(subdiv[i],All)));
+   // generate the equation and inequalities
+   for (int i = 0; i < n_facets; ++i) {
+      const SetInt b(basis_rows(full_dim_verts.minor(subdiv[i], All)));
 
-      //we have to map the numbers the right way:
+      // we have to map the numbers the right way:
       SetInt basis;
-      int k=0;
-      typename Entire<SetInt>::const_iterator l=entire(subdiv[i]);
-      for(typename Entire<SetInt>::const_iterator j=entire(b);!j.at_end();++j,++k,++l) {
-         while(k<*j) {
-            ++k;
-            ++l;
+      {
+         int k = 0;
+         auto l = entire(subdiv[i]);
+         for (auto j = entire(b); !j.at_end(); ++j, ++k, ++l) {
+            while (k < *j) {
+               ++k;
+               ++l;
+            }
+            basis.push_back(*l);
          }
-         basis.push_back(*l);
       }
-      const Scalar basis_det=det(vertices.minor(basis,All));
-      const int basis_sign=basis_det>0?1:-1;
-      const SetInt non_basis=subdiv[i]-basis;
+      const Scalar basis_det  = det(full_dim_verts.minor(basis, All));
+      const int    basis_sign = basis_det>0 ? 1 : -1;
+      const SetInt non_basis  = subdiv[i]-basis;
 
-      //for each maximal face F, all points have to be lifted to the same facet
-      for(typename Entire<SetInt>::const_iterator j=entire(non_basis);!j.at_end();++j) {
-         Vector<Scalar> eq(n_vertices);
-         int s=basis_sign;
-         eq[*j]=s*basis_det;
-         for(typename Entire<SetInt>::const_iterator k=entire(basis);!k.at_end();++k) {
-            const SetInt rest=basis-SetInt(scalar2set(*k));
-            s=-s;
-            eq[*k]=s*det(vertices[*j]/vertices.minor(rest,All));
-         }
-         equats/=eq;
-      }
-
+      // for each maximal face F, all points have to be lifted to the same facet
+      for (const auto& j: non_basis)
+         equats /= new_row(j, full_dim_verts, basis, basis_sign, basis_det);
 
       // for all adjacent maximal faces, all vertices not contained in F have to be lifted
       // in the same direction
-      for(int l=i+1; l<n_facets; ++l)
-         if (rank(vertices.minor(subdiv[i]*subdiv[l],All))==dim) {
-            const int j=*((subdiv[l]-subdiv[i]).begin());
-            Vector<Scalar> ieq(n_vertices);
-            int s=basis_sign;      
-            ieq[j]=s*basis_det;
-            for(typename Entire<SetInt>::const_iterator k=entire(basis);!k.at_end();++k) {
-               const SetInt rest=basis-SetInt(scalar2set(*k));
-               s=-s;
-               ieq[*k]=s*det(vertices[j]/vertices.minor(rest,All));
-            }
-            inequs/=ieq;
-         }
+      for (int f = i + 1; f < n_facets; ++f)
+         if (rank(full_dim_verts.minor(subdiv[i] * subdiv[f], All)) == ambient_dim)
+            inequs /= new_row(*((subdiv[f]-subdiv[i]).begin()), full_dim_verts, basis, basis_sign, basis_det);
 
-      //additional equations for the non-used points
-      for(typename Entire<SetInt>::const_iterator l=entire(not_used);!l.at_end();++l) {
-         Vector<Scalar> ieq(n_vertices);
-         int s=basis_sign;      
-         ieq[*l]=s*basis_det;
-         for(typename Entire<SetInt>::const_iterator k=entire(basis);!k.at_end();++k) {
-            const SetInt rest=basis-SetInt(scalar2set(*k));
-            s=-s;
-            ieq[*k]=s*det(vertices[*l]/vertices.minor(rest,All));
-         }
-         inequs/=ieq;
-      }
+      // additional equations for the non-used points
+      for (const auto& l: not_used)
+         inequs /= new_row(l, full_dim_verts, basis, basis_sign, basis_det);
 
    }
-   return std::pair<const Matrix<Scalar>,const Matrix<Scalar> >(inequs,equats);
+   return std::pair<const SparseMatrix<Scalar>,const SparseMatrix<Scalar>>(inequs, equats);
 }
 
 } }
 
-#endif
+#endif // POLYMAKE_POLYTOPE_IS_REGULAR_H
+
+// Local Variables:
+// mode:C++
+// c-basic-offset:3
+// indent-tabs-mode:nil
+// End:

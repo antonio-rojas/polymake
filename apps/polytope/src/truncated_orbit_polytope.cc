@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -50,7 +50,7 @@ perl::Object truncated_orbit_polytope(perl::Object p, Scalar eps)
    a.take("GENERATORS") << action_gens;
    a.take("INEQUALITIES_GENERATORS") << inequalities_reps;
 
-   perl::Object q(perl::ObjectType::construct<Scalar>("Polytope"));
+   perl::Object q("Polytope", mlist<Scalar>());
    q.take("AFFINE_HULL") << linear_span;
    q.take("GROUP.COORDINATE_ACTION") << a;
 

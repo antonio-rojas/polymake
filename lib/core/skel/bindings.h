@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -14,10 +14,10 @@
 --------------------------------------------------------------------------------
 */
 
-#ifndef POLYMAKE_@{[ $vars{guard_name} ]}_H
-#define POLYMAKE_@{[ $vars{guard_name} ]}_H 
+#ifndef POLYMAKE_@{[ $vars->{guard_name} ]}_H
+#define POLYMAKE_@{[ $vars->{guard_name} ]}_H
 
-#include_next "@{[ $vars{include_file} ]}"
+#include_next "@{[ $vars->{include_file} ]}"
 #include "polymake/client.h"
 
 namespace polymake { namespace perl_bindings {
@@ -25,7 +25,7 @@ namespace polymake { namespace perl_bindings {
 ///==== Automatically generated contents end here.  Please do not delete this line. ====
 } }
 
-#endif // POLYMAKE_@{[ $vars{guard_name} ]}_H
+#endif // POLYMAKE_@{[ $vars->{guard_name} ]}_H
 
 // Local Variables:
 // mode:C++

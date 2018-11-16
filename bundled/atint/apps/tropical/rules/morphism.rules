@@ -21,6 +21,7 @@
 #  Defines properties and rules for Morphism 
 ########################################################################
 
+# @Category Combinatorics
 object Morphism {
 
 	use overload('*' => 'mult', '""' => 'to_string', bool => 'bool', '+' => 'sum', '-' => 'minus', 'neg'=>'neg', fallback => 1);
@@ -84,7 +85,7 @@ object Morphism {
 
 	rule DOMAIN, IS_GLOBALLY_AFFINE_LINEAR : MATRIX, TRANSLATE {
 		computeDomainFromMatrix($this);
-		$this->IS_GLOBALLY_AFFINE_LINEAR = !(defined($this->lookup(VERTEX_VALUES)) || defined($this->lookup(LINEALITY_VALUES)));
+		$this->IS_GLOBALLY_AFFINE_LINEAR = !(defined($this->lookup("VERTEX_VALUES")) || defined($this->lookup("LINEALITY_VALUES")));
 	}
 	weight 0.10;
 	precondition : MATRIX, TRANSLATE {
@@ -117,7 +118,7 @@ object Morphism {
 	# it with the domain of the affine function. 0 by default.
 	# @param Int target_chart Which coordinate of the homogenized target space is shifted to zero to identify
 	# it with the target of the affine function. 0 by default.
-	# @return Pair<Matrix<Rational>, Vector<Rational> > A matrix and a translate in affine coordinates.
+	# @return Pair<Matrix<Rational>, Vector<Rational>> A matrix and a translate in affine coordinates.
 	user_method affine_representation(;$=0,$=0) {
 		my ($morphism, $domain_chart, $target_chart) = @_;
 		if(!defined($morphism->lookup("MATRIX"))) {
@@ -157,10 +158,14 @@ object Morphism {
 		my ($f,$X) = @_;
 
 		#Define identity on X
-		my $vertexvalues = $X->SEPARATED_VERTICES->minor(All,~scalar2set(0));
-		my $linealityvalues = $X->LINEALITY_SPACE->minor(All,~scalar2set(0));
+		my $vertexvalues = $X->SEPARATED_VERTICES->minor(All, range_from(1));
+		my $linealityvalues = $X->LINEALITY_SPACE->minor(All, range_from(1));
 
-		my $emb = new Morphism<Addition>( DOMAIN=>$X, VERTEX_VALUES=>$vertexvalues,LINEALITY_VALUES=>$linealityvalues, MATRIX=>(unit_matrix<Rational>($f->DOMAIN->PROJECTIVE_AMBIENT_DIM+1)));
+		my $emb = new Morphism<Addition>( DOMAIN => $X,
+						  VERTEX_VALUES => $vertexvalues,
+						  LINEALITY_VALUES => $linealityvalues,
+						  MATRIX => unit_matrix<Rational>($f->DOMAIN->PROJECTIVE_AMBIENT_DIM+1)
+						);
 
 		return morphism_composition($emb,$f);
 	}

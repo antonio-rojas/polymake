@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -15,6 +15,33 @@
 
 object Ideal {
 
+   rule initial : GENERATORS {
+      my $gens = $this->GENERATORS;
+      my $nvars = $gens->[0]->n_vars();
+      foreach my $p (@$gens){
+         if($p->n_vars() != $nvars){
+            croak("\ninvalid input: Number of variables needs to be the same for all GENERATORS");
+            return;
+         }
+      }
+   }
+   precondition : !exists(N_VARIABLES);
+	precondition : GENERATORS {
+		$this->GENERATORS->size() > 0;
+	}
+   
+   rule initial : GENERATORS, N_VARIABLES {
+      my $gens = $this->GENERATORS;
+      my $nvars = $this->N_VARIABLES;
+      foreach my $p (@$gens){
+         if($p->n_vars() != $nvars){
+            croak("\ninvalid input: N_VARIABLES does not agree with the number of variables of the GENERATORS");
+            return;
+         }
+      }
+   }
+   precondition : exists(N_VARIABLES);
+
    rule PRIMARY : {
       $this->PRIMARY = 1;
    }
@@ -24,13 +51,6 @@ object Ideal {
    rule PRIMARY : RADICAL.PRIME {
       $this->PRIMARY = $this->RADICAL->PRIME;
    }
-   weight 0.10;
-
-   rule RING : GENERATORS {
-      my $gens = $this->GENERATORS;
-      $this->RING = $gens->[0]->get_ring;
-   }
-   precondition : !ZERO;
    weight 0.10;
 
    rule ZERO : GENERATORS {
@@ -43,6 +63,14 @@ object Ideal {
       $this->ZERO = 1;
    }
    weight 1.10;
+
+	rule N_VARIABLES : GENERATORS {
+		$this->N_VARIABLES = $this->GENERATORS->[0]->n_vars();	
+	}
+	precondition : GENERATORS {
+		$this->GENERATORS->size() > 0;
+	}
+	weight 0.10;
 
 }
 

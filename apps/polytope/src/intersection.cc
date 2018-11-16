@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -59,7 +59,7 @@ perl::Object intersection(const Array<perl::Object>& pp_in)
             AH=p_in->lookup("LINEAR_SPAN | EQUATIONS");
          Inequalities /= F;
          Equations /= AH;
-      } catch(perl::undefined) {
+      } catch(const perl::undefined&) {
          const Matrix<Scalar> AH=p_in->give("LINEAR_SPAN | EQUATIONS");
          Equations /= AH;
       }
@@ -67,11 +67,11 @@ perl::Object intersection(const Array<perl::Object>& pp_in)
       ++p_in;
    }
 
-   perl::ObjectType t=perl::ObjectType::construct<Scalar>(containsPolytope ? Str("Polytope") : Str("Cone"));
+   perl::ObjectType t(containsPolytope ? Str("Polytope") : Str("Cone"), mlist<Scalar>());
    perl::Object p_out(t);
 
    p_out.take("INEQUALITIES") << Inequalities;
-   if (Equations.rows()) p_out.take("EQUATIONS") << Equations;
+   p_out.take("EQUATIONS") << Equations;
    p_out.take("CONE_AMBIENT_DIM") << dim;
 
    if (containsCone) {
@@ -86,23 +86,34 @@ perl::Object intersection(const Array<perl::Object>& pp_in)
 
    return p_out;
 }
-    
+
+template <typename Scalar, typename Matrix1, typename Matrix2, typename Matrix3>
+bool
+cone_intersects_subspace(const GenericMatrix<Matrix1,Scalar> &cone_ineqs,
+                         const GenericMatrix<Matrix2,Scalar> &cone_eqs,
+                         const GenericMatrix<Matrix3,Scalar> &subspace_eqs)
+{
+   return true;
+}
+      
+      
 UserFunctionTemplate4perl("# @category Producing a polytope from polytopes"
                           "# Construct a new polyhedron or cone as the intersection of given polyhedra and/or cones."
                           "# Works only if all [[CONE_AMBIENT_DIM]] values are equal."
                           "# If the input contains both cones and polytopes, the output will be a polytope."
                           "# @param Cone C ... polyhedra and cones to be intersected"
                           "# @return Cone"
-                          "# @example > $p = intersection(cube(2),cross(2,3/2));"
+                          "# @example [prefer cdd]"
+                          "# > $p = intersection(cube(2), cross(2,3/2));"
                           "# > print $p->VERTICES;"
-                          "# | 1 1 1/2 -1"
-                          "# | 1 1 1/2"
-                          "# | 1 1/2 1"
-                          "# | 1 1 -1/2"
                           "# | 1 -1/2 1"
                           "# | 1 -1 1/2"
-                          "# | 1 -1 -1/2"
-                          "# | 1 -1/2 -1",
+                          "# | 1 1/2 1"
+                          "# | 1 1 1/2"
+                          "# | 1 1/2 -1"
+                          "# | 1 1 -1/2"
+                          "# | 1 -1/2 -1"
+                          "# | 1 -1 -1/2",
                           "intersection<Scalar>(Cone<type_upgrade<Scalar>> +)");
 } }
 

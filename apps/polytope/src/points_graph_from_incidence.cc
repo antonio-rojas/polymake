@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -37,10 +37,10 @@ Graph<> points_graph_from_incidence(const Matrix<Rational>& points,  const Gener
 
   EdgeMap<Undirected, Set<int> > intersects(G);
 
-  for (Entire< Nodes< Graph<> > >::iterator n1=entire(nodes(G)); !n1.at_end(); ++n1) {
+  for (auto n1=entire(nodes(G)); !n1.at_end(); ++n1) {
     const Matrix<Rational> min=facets.minor(IM.col(*n1),All);
     if (rank(min)>=dim-1) { //exclude vertices in the interior of some non-edge face
-      Entire< Nodes< Graph<> > >::iterator n2=n1;
+      auto n2=n1;
       while (!(++n2).at_end()) {
         Set<int> common = IM.col(*n1) * IM.col(*n2);
         if (common.empty()) continue;
@@ -58,6 +58,7 @@ Graph<> points_graph_from_incidence(const Matrix<Rational>& points,  const Gener
               int i=1;
               //compute lambda with lambda*points[*n1]+(1-lambda)*points[edge.to_node()]=points[*n2]
               while (points(*n1,i)==points(*n2,i)) ++i;
+              if( points(edge.to_node(),i)==points(*n1,i) ){add=false; break;}
               const Rational lambda=(points(edge.to_node(),i)-points(*n2,i))/(points(edge.to_node(),i)-points(*n1,i));
               // cout<<(*n1)<<" "<<(*n2)<<" "<<edge.to_node()<<" "<<lambda<<endl;
               if (lambda>1);

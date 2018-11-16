@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -25,7 +25,7 @@ namespace polymake { namespace polytope {
 
 namespace {
 
-perl::Object simplex_group(int d) {
+perl::Object simplex_action(int d) {
    const int n_gens= d==1 ? 1 : 2;
    Array< Array< int > > gens(n_gens);
    if ( d==1 ) {
@@ -46,12 +46,7 @@ perl::Object simplex_group(int d) {
    perl::Object a("group::PermutationAction");
    a.take("GENERATORS") << gens;
 
-   perl::Object g("group::Group");
-   g.set_description() << "full combinatorial group on vertices of " << d << "-dim simplex" << endl;
-   g.set_name("fullCombinatorialGroupOnRays");
-   g.take("RAYS_ACTION") << a;
-
-   return g;
+   return a;
 }
 
 
@@ -63,7 +58,11 @@ void add_simplex_data(perl::Object& p, const int d, const bool group_flag) {
    p.take("FEASIBLE") << true;
    p.take("POINTED") << true;
    if ( group_flag ) {
-      p.take("GROUP") << simplex_group(d);
+      perl::Object g("group::Group");
+      g.set_description() << "full combinatorial group on vertices of " << d << "-dim simplex" << endl;
+      g.set_name("fullCombinatorialGroupOnRays");
+      p.take("GROUP") << g;
+      p.take("GROUP.VERTICES_ACTION") << simplex_action(d);
    }
 }
 
@@ -77,7 +76,7 @@ perl::Object simplex(int d, const Scalar& s, perl::OptionSet options)
    if (s==0)
       throw std::runtime_error("scale must be non-zero");
 
-   perl::Object p(perl::ObjectType::construct<Scalar>("Polytope"));
+   perl::Object p("Polytope", mlist<Scalar>());
    p.set_description() << "standard simplex of dimension " << d << endl;
 
    SparseMatrix<Scalar> V( ones_vector<Scalar>(d+1) | (zero_vector<Scalar>(d) / (s*unit_matrix<Scalar>(d))));
@@ -103,7 +102,7 @@ perl::Object regular_simplex(const int d, perl::OptionSet options)
    p.set_description() << "regular simplex of dimension " << d << endl;
 
    QE c(Rational(1,d),Rational(-1,d),d+1);
-   SparseMatrix<QE> V( ones_vector<QE>(d+1) | (unit_matrix<QE>(d) / same_element_vector<QE>(c,d)));
+   SparseMatrix<QE> V( ones_vector<QE>(d+1) | (unit_matrix<QE>(d) / same_element_vector(c,d)));
 
    p.take("VERTICES") << V;
    p.take("CONE_AMBIENT_DIM") << d+1;
@@ -119,7 +118,7 @@ perl::Object fano_simplex(int d, perl::OptionSet options)
    if (d <= 0)
       throw std::runtime_error("fano_simplex : dimension must be postive");
 
-   perl::Object p(perl::ObjectType::construct<Rational>("Polytope"));
+   perl::Object p("Polytope<Rational>");
    p.set_description() << "Fano simplex of dimension " << d << endl;
 
    SparseMatrix<Rational> V( ones_vector<Rational>(d+1) | (unit_matrix<Rational>(d) / same_element_vector<Rational>(-1,d)) );
@@ -138,7 +137,7 @@ perl::Object lecture_hall_simplex(int d, perl::OptionSet options)
    if (d <= 0)
       throw std::runtime_error("lecture_hall_simplex : dimension must be postive");
 
-   perl::Object p(perl::ObjectType::construct<Rational>("Polytope"));
+   perl::Object p("Polytope<Rational>");
    p.set_description() << "lecture hall simplex of dimension " << d << endl;
 
    Matrix<Rational> V(d+1,d+1);
@@ -175,8 +174,8 @@ UserFunction4perl("# @category Producing regular polytopes and their generalizat
                   "# > $s = regular_simplex(3, group=>1);"
                   "# You can then print the groups generators like so:"
                   "# > print $s->GROUP->RAYS_ACTION->GENERATORS;"
-                  "# | 1 0 2"
-                  "# | 2 0 1",
+                  "# | 1 0 2 3"
+                  "# | 3 0 1 2",
                   &regular_simplex, "regular_simplex(Int; { group => undef } )");
 
 UserFunctionTemplate4perl("# @category Producing a polytope from scratch"
@@ -205,7 +204,7 @@ UserFunction4perl("# @category Producing a polytope from scratch"
                   "# @return Polytope"
                   "# @example To create the 2-dimensional fano simplex and compute its symmetry group, type this:"
                   "# and print ints generators, do this:"
-                  "# > fano_simplex(2,group=>1);"
+                  "# > $p = fano_simplex(2,group=>1);"
                   "# > print $p->GROUP->RAYS_ACTION->GENERATORS;"
                   "# | 1 0 2"
                   "# | 2 0 1",

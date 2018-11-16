@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -19,6 +19,7 @@
 #include "polymake/Array.h"
 #include "polymake/PowerSet.h"
 #include "polymake/vector"
+#include "polymake/common/labels.h"
 
 namespace polymake { namespace topaz {
 
@@ -33,19 +34,26 @@ perl::Object clique_complex(perl::Object graph, perl::OptionSet options)
    
    if (!no_labels) {
      const int n_nodes=graph.give("N_NODES");
-     std::vector<std::string> labels(n_nodes);
-     read_labels(graph, "NODE_LABELS", labels);
+     const std::vector<std::string> labels = common::read_labels(graph, "NODE_LABELS", n_nodes);
      complex.take("VERTEX_LABELS") << labels;
    }
    return complex;
 }
 
 UserFunction4perl("# @category Producing a simplicial complex from other objects\n"
-                  "# Produce the __clique complex__ of a given graph.\n"
+                  "# Produce the __clique complex__ of a given graph, that is, the simplicial"
+                  "# complex that has an n-dimensional facet for each n+1-clique.\n"
                   "# If //no_labels// is set to 1, the labels are not copied.\n"
                   "# @param Graph graph"
                   "# @option Bool no_labels Do not create [[VERTEX_LABELS]]. default: 0"
-                  "# @return SimplicialComplex",
+                  "# @return SimplicialComplex"
+                  "# @example Create the clique complex of a simple graph with one 3-clique and"
+                  "#  one 2-clique, not creating labels."
+                  "# > $g = graph_from_edges([[0,1],[0,2],[1,2],[2,3]]);"
+                  "# > $c = clique_complex($g,no_labels=>1);"
+                  "# > print $c->FACETS;"
+                  "# | {0 1 2}"
+                  "# | {2 3}",
                   &clique_complex,"clique_complex(Graph; { no_labels => 0 })");
 } }
 

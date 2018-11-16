@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -23,9 +23,9 @@
 #include "polymake/Graph.h"
 #include "polymake/IndexedSubgraph.h"
 #include "polymake/Bitset.h"
+#include "polymake/Map.h"
 #include "polymake/graph/connected.h"
 #include "polymake/vector"
-#include "polymake/map"
 #include "polymake/list"
 
 namespace polymake { namespace fan {
@@ -162,12 +162,6 @@ public:
       return ss.str();
    }
 
-   friend
-   std::ostream& operator<< (std::ostream& os, const Tubing& T)
-   {
-      return os << T.representation();
-   }
-
    const Graph<Directed>& get_spine() const { return spine; }
    int get_root() const { return root; }
 
@@ -184,7 +178,7 @@ public:
 };
 
 void process_tubing(const Tubing& T, 
-                    std::map<Vector<Rational>, int>& index_of_ray,
+                    Map<Vector<Rational>, int>& index_of_ray,
                     int& max_ray_index,
                     std::vector<Set<int> >& VIF_list,
                     std::vector<std::string>& cone_label_list)
@@ -209,10 +203,10 @@ perl::Object graph_associahedron_fan(const perl::Object& g)
    Set<std::string> seen;
    std::list<int> tubing_queue;
    std::vector<Tubing> tubing_list;
-   std::map<std::string, int> index_of_tubing;
+   Map<std::string, int> index_of_tubing;
    int max_tubing_index(0);
 
-   std::map<Vector<Rational>, int> index_of_ray;
+   Map<Vector<Rational>, int> index_of_ray;
    int max_ray_index(0);
 
    std::vector<Set<int> > VIF_list;
@@ -247,12 +241,12 @@ perl::Object graph_associahedron_fan(const perl::Object& g)
    }
    const IncidenceMatrix<> VIF(VIF_list.size(), max_ray_index, entire(VIF_list));
    Matrix<Rational> rays(max_ray_index, n);
-   for (std::map<Vector<Rational>, int>::const_iterator mit = index_of_ray.begin(), mend = index_of_ray.end(); mit != mend; ++mit)
-      rays[mit->second] = mit->first;
+   for (const auto& ir : index_of_ray)
+      rays[ir.second] = ir.first;
 
    Graph<Undirected> dual_graph(VIF_list.size());
-   for (Entire<std::vector<std::pair<int,int> > >::const_iterator pit = entire(dual_graph_edges); !pit.at_end(); ++pit)
-      dual_graph.edge(pit->first, pit->second);
+   for (const auto& p : dual_graph_edges)
+      dual_graph.edge(p.first, p.second);
 
    perl::Object fan("PolyhedralFan");
    fan.take("RAYS") << rays;
@@ -311,7 +305,7 @@ PowerSet<int> tubes_of_graph(const perl::Object& g)
       tubes += scalar2set(i);
 
    for (int k=2; k <= n; ++k) {
-      for (Entire<Subsets_of_k<const sequence&> >::const_iterator p=entire(all_subsets_of_k(sequence(0,n), k)); !p.at_end(); ++p) {
+      for (auto p=entire(all_subsets_of_k(sequence(0,n), k)); !p.at_end(); ++p) {
          const Set<int> support(*p);
          const Set<int> cc=connected_component(induced_subgraph(G, support), support.front());
          if (cc.size() == support.size())

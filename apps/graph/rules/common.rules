@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2016
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -30,6 +30,7 @@ rule NODE_DEGREES : ADJACENCY {
 }
 weight 1.10;
 
+# @category Combinatorics
 # Explore the graph as a sequence of its edges.
 # @return Array<Set<Int>>
 user_method EDGES {
@@ -112,8 +113,7 @@ rule DEGREE_SEQUENCE, AVERAGE_DEGREE : ADJACENCY {
 }
 
 rule CHARACTERISTIC_POLYNOMIAL : N_NODES, ADJACENCY {
-   my $r = new Ring(1);
-   my $x = new UniPolynomial($r->variable());
+   my $x = monomials(1);
    my $u = new UniPolynomial(-1);
    my $n = $this->N_NODES;
    my $m = new Matrix<UniPolynomial>($n, $n); # don't use unit_matrix because it will get full
@@ -205,7 +205,8 @@ weight 1.10;
 # Creates a graph from a given list of //edges//.
 # @param Array<Set<Int>> edges
 # @return Graph
-# @example > $g = graph_from_edges([[1,2],[1,3],[1,4]]);
+# @example
+# > $g = graph_from_edges([[1,2],[1,3],[1,4]]);
 # > print $g->ADJACENCY;
 # | {}
 # | {2 3 4}
@@ -230,23 +231,115 @@ user_function graph_from_edges($) {
    return new Graph(ADJACENCY=>$g);
 }
 
+user_function graph_from_cycles($) {
+   my $cycles = shift;
+   my $max = 0;
+
+   foreach my $cycle (@$cycles){
+      foreach my $i (0..scalar(@$cycle)-1) {
+         ( $cycle->[$i-1] != $cycle->[$i] ) or croak( $cycle." does not seem to be a cycle (position ".$i.")\n");
+         assign_max($max, $cycle->[$i]);
+      }
+   }
+
+   my $g = new props::Graph($max+1);
+   foreach my $cycle (@$cycles) {
+      foreach my $i (0..scalar(@$cycle)-1) {
+         $g->edge($cycle->[$i-1],$cycle->[$i]);
+      }
+   }
+
+   return new Graph(ADJACENCY=>$g);
+}
+
 
 # @category Combinatorics
 # Creates the __line graph__ of a graph.
 # @param Graph G
 # @return Graph
+# @example The following prints the adjacency matrix of the line graph of the star graph with 4 nodes:
+# > $g = new Graph<Undirected>(ADJACENCY=>[[],[0],[0],[0]]);
+# > print line_graph($g->ADJACENCY);
+# | {1 2}
+# | {0 2}
+# | {0 1}
 user_function line_graph(props::Graph) : c++ (include=>["polymake/graph/line_graph.h"]);
 
 # @category Combinatorics
 # Creates the __complement graph__ of a graph.
 # @param Graph G
 # @return Graph
+# @example The following prints the adjancency matrix of the complement graph of the star graph with 4 nodes: 
+# > $g = new Graph<Undirected>(ADJACENCY=>[[],[0],[0],[0]]);
+# > print complement_graph($g)->ADJACENCY;
+# | {}
+# | {2 3}
+# | {1 3}
+# | {1 2}
 user_function complement_graph($) {
-    my $g = shift;
-    my $inv_adj = ~( adjacency_matrix($g->ADJACENCY) )- index_matrix( unit_matrix($g->N_NODES) );
-    return new Graph(ADJACENCY=>$inv_adj, N_NODES=>$g->N_NODES, NODE_LABELS=>$g->NODE_LABELS);
+   my $g = shift;
+   my $inv_adj = ~( adjacency_matrix($g->ADJACENCY) )- index_matrix( unit_matrix($g->N_NODES) );
+   my $G = new Graph(ADJACENCY=>$inv_adj, N_NODES=>$g->N_NODES);
+   if (defined $g->lookup("NODE_LABELS")) {
+      $G->NODE_LABELS = $g->NODE_LABELS;
+   }
+   return $G;
 }
 
+# @category Combinatorics
+# Compute the unsigned vertex-edge incidence matrix of the graph.
+ # @param Graph G
+# @return SparseMatrix<Int>
+# @example
+# > $I = incidence_matrix(cycle_graph(4));
+# > print $I
+# | 1 0 1 0
+# | 1 1 0 0
+# | 0 1 0 1
+# | 0 0 1 1
+user_function incidence_matrix<Dir>(Graph<Dir>): c++ (include=>["polymake/graph/incidence_matrix.h"]);
+
+# @category Combinatorics
+# Compute the signed vertex-edge incidence matrix of the graph.
+# In case of undirected graphs, the orientation of the edges is induced by the order of the nodes.
+# @param Graph G
+# @return SparseMatrix<Int>
+# @example
+# > $I = signed_incidence_matrix(cycle_graph(4));
+# > print $I;
+# | 1 0 1 0
+# | -1 1 0 0
+# | 0 -1 0 1
+# | 0 0 -1 -1
+user_function signed_incidence_matrix<Dir>(Graph<Dir>): c++ (include=>["polymake/graph/incidence_matrix.h"]);
+      
+# @category Combinatorics
+# Compute the unsigned vertex-edge incidence matrix of the graph.
+# @param common::Graph G
+# @return SparseMatrix<Int>
+# @example
+# > $I = incidence_matrix(cycle_graph(4)->ADJACENCY);
+# > print $I;
+# | 1 0 1 0
+# | 1 1 0 0
+# | 0 1 0 1
+# | 0 0 1 1
+user_function incidence_matrix(props::Graph) : c++ (include=>["polymake/graph/incidence_matrix.h"]);
+      
+# @category Combinatorics
+# Compute the signed vertex-edge incidence matrix of the graph.
+# In case of undirected graphs, the orientation of the edges is induced by the order of the nodes.
+# @param common::Graph G
+# @return SparseMatrix<Int>
+# @example
+# > $I = signed_incidence_matrix(cycle_graph(4)->ADJACENCY);
+# > print $I;
+# | 1 0 1 0
+# | -1 1 0 0
+# | 0 -1 0 1
+# | 0 0 -1 -1
+user_function signed_incidence_matrix(props::Graph) : c++ (include=>["polymake/graph/incidence_matrix.h"]);
+                               
 ############################################################################
 
 function is_connected(props::Graph<Undirected>) : c++ (include=>["polymake/graph/connected.h"]);

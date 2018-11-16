@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -28,7 +28,8 @@ user_function cast<Target>(Core::Object) { $_[0]->cast_me(typeof Target); }
 # @category Utilities
 # Returns the maximal element of an array.
 # @param ARRAY array
-# @example > print maximum([1,2,3,4,5,6,7,23]);
+# @example
+# > print maximum([1,2,3,4,5,6,7,23]);
 # | 23
 
 user_function maximum($) {
@@ -42,7 +43,8 @@ user_function maximum($) {
 # @category Utilities
 # Returns the minimal element of an array.
 # @param ARRAY array
-# @example  > print minimum([23,42,666]);
+# @example
+# > print minimum([23,42,666]);
 # | 23
 
 user_function minimum($) {
@@ -56,7 +58,8 @@ user_function minimum($) {
 # @category Utilities
 # Returns the average value of the array elements.
 # @param ARRAY array
-# @example > print average([1,2,3]);
+# @example
+# > print average([1,2,3]);
 # | 2
 
 user_function average($) {
@@ -70,7 +73,8 @@ user_function average($) {
 # @category Utilities
 # Returns the median value of the array elements.
 # @param ARRAY array
-# @example > print median([1,2,3,9]);
+# @example
+# > print median([1,2,3,9]);
 # | 2.5
 
 user_function median($) {
@@ -88,20 +92,68 @@ user_function median($) {
 # Produce a histogram of an array: each different element value is mapped on the number of its occurences.
 # @param ARRAY data
 # @return Map<Element, Int>
-# @example > $H = histogram([1,1,2,2,2,3,3,2,3,3,1,1,1,3,2,3]);
+# @example
+# > $H = histogram([1,1,2,2,2,3,3,2,3,3,1,1,1,3,2,3]);
 # > print $H;
 # | {(1 5) (2 5) (3 6)}
 
 user_function histogram {
    my ($data)=@_;
    return unless @$data;
-   my $element_type=Core::PropertyType::guess_element_type($data);
-   my $map=(typeof Map($element_type, typeof Int))->construct->();
+   my $element_type=Core::PropertyType::guess_array_element_type($data);
+   my $map=new Map<$element_type, Int>();
    ++$map->{$_} for @$data;
    $map
 }
 
 
+# @category Utilities
+# Checks if a given sequence is unimodal
+# @param ARRAY data (or Array<Scalar>)
+# @return Bool
+# @example 
+# > print is_unimodal([1,1,2,3,3,2,2,1]);
+# | 1                     
+# > print is_unimodal([3,3,2,-1]);
+# | 1
+# > print is_unimodal([1,3,2,3]);
+# | 0
+user_function is_unimodal {
+    my ($seq) = @_;
+    return unless @$seq;
+    my $seen_decreasing = 0;
+    my $prev=$seq->[0];
+    for (@$seq) {
+        if ($prev < $_) {
+            if ($seen_decreasing) {
+                return 0;
+            }
+        } elsif ($prev > $_) {
+            $seen_decreasing = 1;
+        }
+        $prev = $_;
+    }
+    return 1;
+}
+                     
+# @category Utilities
+# Checks if a given sequence is nonnegative
+# @param ARRAY data
+# @return Bool
+# @example 
+# > print is_nonnegative([1,0,3]);
+# | 1
+user_function is_nonnegative {
+    my ($seq) = @_;
+    return unless @$seq;
+    for (@$seq) {
+        if ($_ < 0) {
+            return 0;
+        }
+    }
+    return 1;
+}
+                     
 # @category Utilities
 # Returns the first //m// Fibonacci numbers.
 # @param Int m
@@ -188,7 +240,8 @@ function find_labels {
 # Return a map indexing an array of sets
 # @param Array<Set<Int>> array
 # @return HashMap<Array<Set<Int>>, Int>
-# @example > $s1 = new Set(1,2,3);
+# @example [nocompare]
+# > $s1 = new Set(1,2,3);
 # > $s2 = $s1 - 1;
 # > $a = new Array<Set>($s1,$s2,$s1);
 # > print index_of($a);
@@ -210,11 +263,12 @@ user_function index_of(Array<Set<Int>>) {
 # @param Matrix S
 # @param CODE d
 # @return Matrix
-# @example The following defines the perl subroutine dist as the euclidean metric and then saves the distance matrix of the 3-cubes vertices in the variable $M:
-# > sub dist($$){
+# @example
+# The following defines the perl subroutine dist as the euclidean metric and then saves the distance matrix of the 3-cubes vertices in the variable $M:
+# > sub dist($$) {
 # >    my $v = $_[0] - $_[1];
-# >    return sqrt(new Float($v*$v)) };
-# > $M = distance_matrix(cube(3)->VERTICES,\&dist);
+# >    return sqrt(new Float($v*$v)); }
+# > $M = distance_matrix(polytope::cube(3)->VERTICES, \&dist);
 user_function distance_matrix($$){
 	my ($S, $d) = @_;
 	my $n = $S->rows;
@@ -225,7 +279,17 @@ user_function distance_matrix($$){
 		}
 	}
 	return $M;
-}
+                     }
+
+# @category Linear Algebra
+# Compute the Hadamard product of two matrices with same dimensions.
+# @param Matrix M1
+# @param Matrix M2
+# @return Matrix"
+
+user_function hadamard_product<Scalar>(Matrix<type_upgrade<Scalar>,_>, Matrix<type_upgrade<Scalar>,_>): c++ (include => "polymake/common/hadamard_product.h");
+
+                     
 # Local Variables:
 # mode: perl
 # cperl-indent-level:3

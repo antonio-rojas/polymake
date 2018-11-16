@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -19,7 +19,7 @@
 
 IMPORT common graph
 
-USE polytope fan graph matroid 
+USE polytope fan graph matroid
 
 file_suffix trop
 
@@ -29,9 +29,7 @@ HELP help.rules
 
 ##################################################################################
 
-# This is an augmented version of FaceLattice, which for each cell in a covector decomposition
-# also saves the corresponding type.
-declare object CovectorLattice : FaceLattice;
+declare property_type CovectorDecoration : c++ (include=>"polymake/tropical/covectors.h");
 
 # A tropical polytope is the tropical convex hull of finitely many points in tropical projective space.
 # It should always be defined via [[POINTS]] instead of [[VERTICES]], as those define the combinatorics
@@ -53,15 +51,16 @@ declare object Polytope<Addition, Scalar=Rational> [ is_ordered_field_with_unlim
 # @tparam Addition The tropical addition. Warning: There is NO default for this, you have to choose either [[Max]] or [[Min]].
 declare object Cycle<Addition> : fan::PolyhedralComplex<Rational>;
 
-# This is a special instance of a Cycle: It is the tropical locus of a 
+# This is a special instance of a Cycle: It is the tropical locus of a
 # polynomial over the tropical numbers.
 declare object Hypersurface<Addition> : Cycle<Addition>;
 
 INCLUDE
   cycle.rules
   hypersurface.rules
-  cone_properties.rules
+  viro_examples.rules
   covector_lattice.rules
+  cone_properties.rules
   cone.rules
   gfan.rules
   #FIXME Add connection to tplib again?

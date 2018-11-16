@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -22,6 +22,9 @@
 
 namespace polymake { namespace perl_bindings {
 ///==== Automatically generated contents follow.    Please do not delete this line. ====
+   template <typename T, typename T0, typename T1>
+   RecognizeType4perl("Polymake::common::UniPolynomial", (T0,T1), UniPolynomial<T0,T1>)
+
    template <typename T, typename T0, typename T1>
    RecognizeType4perl("Polymake::common::RationalFunction", (T0,T1), RationalFunction<T0,T1>)
 

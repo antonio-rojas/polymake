@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2016
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -24,7 +24,7 @@ IMPORT
   graph
 
 USE
-  common polytope
+  polytope
 
 file_suffix mat
 

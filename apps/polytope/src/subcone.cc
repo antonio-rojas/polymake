@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -18,6 +18,7 @@
 #include "polymake/vector"
 #include "polymake/Matrix.h"
 #include "polymake/Set.h"
+#include "polymake/common/labels.h"
 
 namespace polymake { namespace polytope {
 
@@ -34,7 +35,7 @@ perl::Object subcone(perl::Object c_in, const Set<int> selection, perl::OptionSe
    const Matrix<Scalar> L=c_in.give("LINEALITY_SPACE");
    const int adim=c_in.give("CONE_AMBIENT_DIM"); // don't look at V.cols() because of trivial cone
 
-   perl::Object c_out(perl::ObjectType::construct<Scalar>("Cone"));
+   perl::Object c_out("Cone", mlist<Scalar>());
    c_out.set_description() << "subcone of " << c_in.name() << endl;
 
    c_out.take("RAYS") << V.minor(selection,All);
@@ -42,8 +43,7 @@ perl::Object subcone(perl::Object c_in, const Set<int> selection, perl::OptionSe
    c_out.take("CONE_AMBIENT_DIM") << adim;
 
    if (!options["no_labels"]) {
-      std::vector<std::string> labels(n_rays_out);
-      read_labels(c_in, "RAY_LABELS", labels);
+      const std::vector<std::string> labels = common::read_labels(c_in, "RAY_LABELS", n_rays);
       c_out.take("RAY_LABELS") << select(labels, selection);
    }
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -26,11 +26,11 @@ namespace polymake { namespace group {
 namespace {
 
 // a helper function to construct a new index_of if the given one is empty
-template<typename DomainType, typename DomainConstIterator>
-const hash_map<DomainType, int>&
+template<typename DomainConstIterator, typename MapType>
+const MapType&
 valid_index_of(DomainConstIterator domain_it,
-               const hash_map<DomainType, int>& _index_of,
-               hash_map<DomainType, int>& _new_index_of)
+               const MapType& _index_of,
+               MapType& _new_index_of)
 {
    if (_index_of.size()) return _index_of;
 
@@ -43,22 +43,23 @@ valid_index_of(DomainConstIterator domain_it,
 
 } // end anonymous namespace
 
-template<typename op_tag, typename DomainType, typename PERM, typename DomainConstIterator>
+template<typename op_tag, typename PERM, typename DomainConstIterator, typename MapType>
 Array<int>
 induced_permutation_impl(const PERM& perm,
                          int domain_size,
                          DomainConstIterator domain_it,
-                         const hash_map<DomainType, int>& _index_of)
+                         const MapType& _index_of)
 {
-   hash_map<DomainType, int> _new_index_of;
-   const hash_map<DomainType, int>& index_of(valid_index_of(domain_it, _index_of, _new_index_of));
+   typedef typename MapType::key_type DomainType;
+   MapType _new_index_of;
+   const MapType& index_of(valid_index_of(domain_it, _index_of, _new_index_of));
 
    Array<int> induced_perm(domain_size);
    const pm::operations::group::action<DomainType, op_tag, PERM> a(perm);
    try {
       for (auto& iperm : induced_perm)
-         iperm = index_of.at(a(*domain_it)), ++domain_it;
-   } catch (no_match) {
+         iperm = index_of[a(*domain_it)], ++domain_it;
+   } catch (const no_match&) {
       std::ostringstream os;
       wrap(os) << "The given domain is not invariant under the permutation " << perm;
       throw no_match(os.str());
@@ -76,27 +77,29 @@ induced_permutation_impl(const PERM& perm,
   * converting an action on VERTICES to one on facets and vice versa, via
 
      DomainType          = Set<int>,
-     DomainConstIterator = Entire<Rows<IncidenceMatrix<>>>::const_iterator,
+     DomainConstIterator = Rows<IncidenceMatrix<>>::const_iterator,
 
   * converting an action on coordinates to an action on indices, for instance for VERTICES or FACETS, via
 
      DomainType          = Vector<Scalar>,
-     DomainConstIterator = Entire<Rows<GenericMatrix<MatrixTop, Scalar>>>::const_iterator
+     DomainConstIterator = Rows<GenericMatrix<MatrixTop, Scalar>>::const_iterator
 */    
-template<typename op_tag, typename DomainType, typename DomainConstIterator>
-Array<Array<int>> induced_permutations_impl(const Array<Array<int>>& original_permutations,
+template<typename op_tag, typename PERM, typename DomainConstIterator, typename MapType>
+Array<Array<int>> induced_permutations_impl(const Array<PERM>& original_permutations,
                                             int domain_size,
                                             DomainConstIterator domain_it,
-                                            const hash_map<DomainType, int>& _index_of) 
+                                            const MapType& _index_of) 
 {
-   hash_map<DomainType, int> _new_index_of;
-   const hash_map<DomainType, int>& index_of(valid_index_of(domain_it, _index_of, _new_index_of));
+   MapType _new_index_of;
+   const MapType& index_of(valid_index_of(domain_it, _index_of, _new_index_of));
 
    Array<Array<int>> induced_permutations(original_permutations.size());
-   Entire<Array<Array<int>>>::iterator iit = entire(induced_permutations);
+   auto iit = entire(induced_permutations);
 
-   for (const auto& g : original_permutations)
-      *iit = induced_permutation_impl<op_tag>(g, domain_size, domain_it, index_of), ++iit;
+   for (const auto& g : original_permutations) {
+      *iit = induced_permutation_impl<op_tag>(g, domain_size, domain_it, index_of);
+      ++iit;
+   }
 
    return induced_permutations;
 }

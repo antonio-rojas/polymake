@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -58,7 +58,7 @@ Graph<Directed> dgraph(perl::Object p, perl::Object lp, perl::OptionSet options)
             }
             int idiff=sign(*obj_value - obj[e.to_node()]);
             if (idiff==0 && generic)
-               idiff= (V.row(*n) > V.row(e.to_node())) ^ inverse ? 1 : -1;
+               idiff= lex_compare(V.row(*n), V.row(e.to_node())) == (inverse ? pm::cmp_lt : pm::cmp_gt) ? 1 : -1;
 
             if (idiff<=0)
                n.in_edges().erase(e.to_node());
@@ -73,8 +73,8 @@ Graph<Directed> dgraph(perl::Object p, perl::Object lp, perl::OptionSet options)
    if (!inverse && !generic) {
       Set<int> minface, maxface;
       for (auto n=entire(nodes(DG));  !n.at_end();  ++n) {
-         if (!n.in_degree() && n.out_degree()) minface.push_back(n.index());
-         if (!n.out_degree() && n.in_degree()) maxface.push_back(n.index());
+         if (!n.in_degree()) minface.push_back(n.index());
+         if (!n.out_degree()) maxface.push_back(n.index());
       }
       lp.take("MINIMAL_FACE") << minface;
       lp.take("MAXIMAL_FACE")  << maxface;

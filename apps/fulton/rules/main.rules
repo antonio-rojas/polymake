@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -34,14 +34,14 @@ declare object CyclicQuotient : NormalToricVariety;
 INCLUDE
    toric_ideal.rules
    toric_divisor_properties.rules
-   toric_divisor.rules
    toric_variety_properties.rules
+   toric_divisor.rules
    toric_variety.rules
    affine_toric_variety.rules
    cyclic_quotient_properties.rules
    cyclic_quotient.rules
    standard_constructions.rules
-
+   toric_divisor_classes.rules
 
 
 # Local Variables:

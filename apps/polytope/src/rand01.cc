@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -45,7 +45,7 @@ perl::Object rand01(int d, int n, perl::OptionSet options)
 
    Matrix<Rational> V(n,d+1);
    hash_set<Bitset>::iterator bv=bitvectors.begin();
-   for (Entire< Rows< Matrix<Rational> > >::iterator v=entire(rows(V)); !v.at_end(); ++v, ++bv)
+   for (auto v=entire(rows(V)); !v.at_end(); ++v, ++bv)
       *v = 1 | same_element_sparse_vector<int>(*bv,d);
       
    p.take("VERTICES") << V;

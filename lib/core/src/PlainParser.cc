@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -66,12 +66,25 @@ int PlainParserCommon::count_braced(char opening, char closing)
    return cnt;
 }
 
+bool PlainParserCommon::lone_clause_on_line(char opening, char closing)
+{
+   std::streambuf* mybuf=is->rdbuf();
+   int offset=CharBuffer::next_non_ws(mybuf, 0);
+   if (offset<0 || CharBuffer::get_ptr(mybuf)[offset] != opening) return false;
+   offset=CharBuffer::matching_brace(mybuf, opening, closing, offset+1);
+   if (offset<0) {
+      is->setstate(is->failbit);
+      return false;
+   }
+   return CharBuffer::seek_forward(mybuf, offset+1) == '\n';
+}
+
 int PlainParserCommon::count_leading(char c)
 {
-   std::streambuf *mybuf=is->rdbuf();
+   std::streambuf* mybuf=is->rdbuf();
    int cnt=0, offset=-1;
    for (;;) {
-      if ((offset=CharBuffer::next_non_ws(mybuf,offset+1)) < 0)
+      if ((offset=CharBuffer::next_non_ws(mybuf, offset+1)) < 0)
          return -1;
       if (CharBuffer::get_ptr(mybuf)[offset] != c) break;
       ++cnt;

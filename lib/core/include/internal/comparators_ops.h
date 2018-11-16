@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -27,16 +27,16 @@
 namespace pm {
 
 template <>
-struct spec_object_traits<double> :
-   spec_object_traits< cons<double, int_constant<object_classifier::is_scalar> > > {
+struct spec_object_traits<double>
+   : spec_object_traits< cons<double, int_constant<object_classifier::is_scalar> > > {
 public:
    static double global_epsilon;
    static bool is_zero(double x) { return abs(x) <= global_epsilon; }
 };
 
 template <>
-struct spec_object_traits<float> :
-   spec_object_traits< cons<float, int_constant<object_classifier::is_scalar> > > {
+struct spec_object_traits<float>
+   : spec_object_traits< cons<float, int_constant<object_classifier::is_scalar> > > {
 public:
    static bool is_zero(float x) { return abs(x) <= spec_object_traits<double>::global_epsilon; }
 };
@@ -111,10 +111,56 @@ struct equals_to_zero {
 };
 
 template <typename T1, typename T2, typename ComparatorFamily,
-          typename Model1=typename object_traits<T1>::model, typename Model2=typename object_traits<T2>::model,
-          typename _discr=typename isomorphic_types<T1,T2>::discriminant,
-          bool _enabled=isomorphic_types<T1,T2>::value>
-struct build_comparator;
+          typename Model1=typename object_traits<T1>::model,
+          typename Model2=typename object_traits<T2>::model,
+          typename TDiscr=typename isomorphic_types<T1, T2>::discriminant,
+          typename Result=cmp_value>
+struct define_comparator {};
+
+struct cmp;
+struct cmp_with_leeway;
+struct cmp_unordered;
+
+template <typename T1, typename T2>
+struct define_comparator<T1, T2, cmp, is_scalar, is_scalar, cons<is_scalar, is_scalar>,
+                         typename cmp_scalar<T1, T2>::result_type> {
+   typedef cmp_scalar<T1, T2> type;
+   static const bool partially_defined=true;
+};
+
+template <typename T1, typename T2>
+struct define_comparator<T1, T2, cmp_with_leeway, is_scalar, is_scalar, cons<is_scalar, is_scalar>,
+                         typename cmp_scalar<T1, T2>::result_type> {
+   typedef cmp_scalar_with_leeway<T1, T2> type;
+   static const bool partially_defined=true;
+};
+
+template <typename T1, typename T2>
+struct define_comparator<T1, T2, cmp_unordered, is_scalar, is_scalar, cons<is_scalar, is_scalar>,
+                         typename cmp_unordered_impl<T1, T2>::result_type> {
+   typedef cmp_unordered_impl<T1, T2> type;
+   static const bool partially_defined=type::partially_defined;
+};
+
+template <typename T, typename Tag>
+struct define_comparator<T, T, cmp, is_opaque, is_opaque, cons<Tag, Tag>,
+                         typename cmp_opaque<T>::result_type> {
+   typedef cmp_opaque<T> type;
+   static const bool partially_defined=is_partially_defined<type>::value;
+};
+
+template <typename T, typename Tag>
+struct define_comparator<T, T, cmp_unordered, is_opaque, is_opaque, cons<Tag, Tag>,
+                         typename cmp_unordered_impl<T, T>::result_type> {
+   typedef cmp_unordered_impl<T, T> type;
+   static const bool partially_defined=type::partially_defined;
+};
+
+template <typename T>
+struct define_comparator<T*, T*, cmp, is_not_object, is_not_object, pm::cons<pm::is_not_object, pm::is_not_object>, cmp_value> {
+   typedef cmp_pointer<T> type;
+   static const bool partially_defined=false;
+};
 
 template <typename ComparatorFamily>
 struct generic_comparator : incomplete {
@@ -122,51 +168,32 @@ struct generic_comparator : incomplete {
    template <typename Left, typename Right>
    cmp_value operator()(const Left& l, const Right& r) const
    {
-      return typename build_comparator<Left, Right, ComparatorFamily>::type()(l, r);
+      return typename define_comparator<Left, Right, ComparatorFamily>::type()(l, r);
    }
 
    template <typename Left, typename Iterator2>
-   cmp_value operator() (typename std::enable_if<build_comparator<Left, Left, ComparatorFamily>::partially_defined, partial_left>::type,
+   cmp_value operator() (typename std::enable_if<define_comparator<Left, Left, ComparatorFamily>::partially_defined, partial_left>::type,
                          const Left& l, const Iterator2& r) const
    {
-      return typename build_comparator<Left, Left, ComparatorFamily>::type()(partial_left(), l, r);
+      return typename define_comparator<Left, Left, ComparatorFamily>::type()(partial_left(), l, r);
    }
 
    template <typename Right, typename Iterator1>
-   cmp_value operator() (typename std::enable_if<build_comparator<Right, Right, ComparatorFamily>::partially_defined, partial_right>::type,
+   cmp_value operator() (typename std::enable_if<define_comparator<Right, Right, ComparatorFamily>::partially_defined, partial_right>::type,
                          const Iterator1& l, const Right& r) const
    {
-      return typename build_comparator<Right, Right, ComparatorFamily>::type()(partial_right(), l, r);
+      return typename define_comparator<Right, Right, ComparatorFamily>::type()(partial_right(), l, r);
    }
 };
 
+/// default comparator, falls back to operator< for scalars and opaque classes
+/// and lexicographic ordering for containers and composites
 struct cmp : generic_comparator<cmp> {};
 
+/// comparator only checking for equality, should not be used for sets and other structures requiring total ordering
+struct cmp_unordered : generic_comparator<cmp_unordered> {};
+
 struct cmp_with_leeway : generic_comparator<cmp_with_leeway> {};
-
-template <typename T1, typename T2>
-struct build_comparator<T1, T2, cmp, is_scalar, is_scalar, cons<is_scalar, is_scalar>, true> {
-   typedef cmp_scalar<T1,T2> type;
-   static const bool partially_defined=true;
-};
-
-template <typename T1, typename T2>
-struct build_comparator<T1, T2, cmp_with_leeway, is_scalar, is_scalar, cons<is_scalar, is_scalar>, true> {
-   typedef cmp_scalar_with_leeway<T1,T2> type;
-   static const bool partially_defined=true;
-};
-
-template <typename T, typename Tag>
-struct build_comparator<T, T, cmp, is_opaque, is_opaque, cons<Tag,Tag>, true> {
-   typedef cmp_opaque<T> type;
-   static const bool partially_defined=is_partially_defined<type>::value;
-};
-
-template <typename T>
-struct build_comparator<T*, T*, cmp, is_not_object, is_not_object, pm::cons<pm::is_not_object, pm::is_not_object>, true> {
-   typedef cmp_pointer<T> type;
-   static const bool partially_defined=false;
-};
 
 template <typename Comparator, typename LeftRef, typename RightRef, cmp_value good>
 struct cmp_adapter {
@@ -278,16 +305,43 @@ struct abs_value {
 
 } // end namespace operations
 
+template <typename T, typename result=cmp_value>
+struct is_ordered_impl : std::false_type { };
+
+template <typename T>
+struct is_ordered_impl<T, typename operations::define_comparator<T, T, operations::cmp>::type::result_type> : std::true_type { };
+
+/// check whether the default comparator operations::cmp can be used with the given type
+template <typename T>
+struct is_ordered : is_ordered_impl<typename Concrete<T>::type> { };
+
+template <typename T, typename result=cmp_value>
+struct is_unordered_comparable_impl : std::false_type { };
+
+template <typename T>
+struct is_unordered_comparable_impl<T, typename operations::define_comparator<T, T, operations::cmp_unordered>::type::result_type> : std::true_type { };
+
+/// check whether the comparator operations::cmp_unordered can be used with the given type
+template <typename T>
+struct is_unordered_comparable : is_unordered_comparable_impl<typename Concrete<T>::type> { };
+
 // Tag for various parameter lists
 template <typename> class ComparatorTag;
 
-template <typename Iterator1, typename Iterator2, typename Reference1, typename Reference2>
-struct binary_op_builder<operations::cmp, Iterator1, Iterator2, Reference1, Reference2> :
-   empty_op_builder<typename operations::build_comparator<typename deref<Reference1>::type, typename deref<Reference2>::type, operations::cmp>::type> {};
+// Tag for multimaps
+template <typename> class MultiTag;
 
 template <typename Iterator1, typename Iterator2, typename Reference1, typename Reference2>
-struct binary_op_builder<operations::cmp_with_leeway, Iterator1, Iterator2, Reference1, Reference2> :
-   empty_op_builder<typename operations::build_comparator<typename deref<Reference1>::type, typename deref<Reference2>::type, operations::cmp_with_leeway>::type> {};
+struct binary_op_builder<operations::cmp, Iterator1, Iterator2, Reference1, Reference2>
+   : empty_op_builder<typename operations::define_comparator<typename deref<Reference1>::type, typename deref<Reference2>::type, operations::cmp>::type> {};
+
+template <typename Iterator1, typename Iterator2, typename Reference1, typename Reference2>
+struct binary_op_builder<operations::cmp_with_leeway, Iterator1, Iterator2, Reference1, Reference2>
+   : empty_op_builder<typename operations::define_comparator<typename deref<Reference1>::type, typename deref<Reference2>::type, operations::cmp_with_leeway>::type> {};
+
+template <typename Iterator1, typename Iterator2, typename Reference1, typename Reference2>
+struct binary_op_builder<operations::cmp_unordered, Iterator1, Iterator2, Reference1, Reference2>
+   : empty_op_builder<typename operations::define_comparator<typename deref<Reference1>::type, typename deref<Reference2>::type, operations::cmp_unordered>::type> {};
 
 } // end namespace pm
 

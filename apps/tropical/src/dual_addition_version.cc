@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -45,13 +45,6 @@ namespace polymake { namespace tropical {
 			"# It indicates, whether the signs of the entries should be inverted."
 			"# @return Matrix<TropicalNumber>",
 			"dual_addition_version<Addition,Scalar>(Matrix<TropicalNumber<Addition,Scalar> >;$=1)");
-
-	UserFunctionTemplate4perl("# @category Conversion of tropical addition"
-			"# This function takes a ring over the tropical numbers and returns a ring that"
-			"# uses the opposite tropical addition. Variable names are preserved"
-			"# @param Ring<TropicalNumber<Addition,Scalar> > ring"
-			"# @return Ring<TropicalNumber>",
-			"dual_addition_version<Addition,Scalar>(Ring<TropicalNumber<Addition,Scalar> >)");
 
 	UserFunctionTemplate4perl("# @category Conversion of tropical addition"
 			"# This function takes a tropical polynomial and returns a tropical polynomial that "

@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2016
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -14,14 +14,14 @@
 #-------------------------------------------------------------------------------
 
 use strict;
-use feature 'state';
 use namespaces;
+use warnings qw(FATAL void syntax misc);
+use feature 'state';
 
 package Polymake::Core::PropertyType;
 
-declare @delimiters;
-declare $nesting_level;
 declare $trusted_value;
+declare $nested_instantiation=0;
 
 sub canonical_fallback { }
 sub equal_fallback { $_[0] == $_[1] }
@@ -29,20 +29,18 @@ sub isa_fallback : method { UNIVERSAL::isa($_[1], $_[0]->pkg) }
 sub coherent_type_fallback { undef }
 sub parse_fallback : method { croak( "no string parsing routine defined for class ", $_[0]->full_name ) }
 sub toString_fallback { "$_[0]" }
-sub toXML_fallback {
-   my ($value, $writer, @attrs)=@_;
-   $writer->dataElement("e", "$value", @attrs);
-}
+
 sub init_fallback { }
 sub performs_deduction { 0 }
 sub type_param_index { undef }
 
 sub type : method { $_[0] }
 define_function(__PACKAGE__, ".type", \&type);
+sub generic { undef }
 
 use Polymake::Struct (
    [ new => '$$$;$' ],
-   [ '$name | full_name | mangled_name' => '#1' ],
+   [ '$name | full_name | mangled_name | xml_name' => '#1' ],
    [ '$pkg' => '#2' ],
    [ '$application' => '#3' ],
    [ '$extension' => '$Application::extension' ],
@@ -54,7 +52,9 @@ use Polymake::Struct (
    [ '$upgrades' => 'undef' ],                                     # optional hash PropertyType => 1/0/-1
    [ '&coherent_type' => '->super || \&coherent_type_fallback' ],  # object of a different type => PropertyType of this or a derived type or undef
    [ '&toString' => '->super || \&toString_fallback' ],            # object => "string"
-   [ '&toXML' => '->super || \&toXML_fallback' ],                  # object, writer =>
+   [ '&toXML' => '->super' ],                                      # object, XMLwriter, opt. attributes =>
+   [ '&toXMLschema' => 'undef || \&Polymake::Core::XMLwriter::type_toXMLschema' ],          # XMLwriter, opt. attributes =>
+   [ '&XMLdatatype' => '->super' ],                                # => "string" referring to a XML Schema datatype or a pattern
    [ '$construct_node' => 'undef' ],                               # Overload::Node
    [ '&construct' => '\&construct_object' ],                       # args ... => object
    [ '&parse' => '->super || \&parse_fallback' ],                  # "string" => object
@@ -63,14 +63,11 @@ use Polymake::Struct (
    [ '&init' => '->super || \&init_fallback' ],
    [ '$context_pkg' => 'undef' ],
    [ '$cppoptions' => 'undef' ],
+   [ '$operators' => 'undef' ],
    [ '$help' => 'undef' ],              # InteractiveHelp (in interactive mode, when comments are supplied for user methods)
 );
 
-declare @override_methods=qw( canonical equal isa coherent_type parse toString toXML init );
-
-declare @string_ops=map { $_ => eval <<"." } qw( . cmp eq ne lt le gt ge );
-sub { \$_[2] ? "\$_[1]" $_ "\$_[0]" : "\$_[0]" $_ "\$_[1]" }
-.
+declare @override_methods=qw( canonical equal isa coherent_type parse toString XMLdatatype init );
 
 ####################################################################################
 #
@@ -81,12 +78,13 @@ sub { \$_[2] ? "\$_[1]" $_ "\$_[0]" : "\$_[0]" $_ "\$_[1]" }
 sub new {
    my $self=&_new;
    my $pkg=$self->pkg;
-   Overload::learn_package_retrieval($self, \&pkg);
+   Struct::learn_package_retrieval($self, \&pkg);
    my $self_sub=sub { $self };
    define_function($pkg, "type", $self_sub, 1);
    define_function($pkg, ".type", $self_sub);
    if ($self->super) {
       $self->dimension=$self->super->dimension;
+      $self->operators=$self->super->operators;
       if ($self->construct_node=$self->super->construct_node) {
          create_method_new($self);
       }
@@ -107,35 +105,37 @@ sub establish_inheritance {
    @{$self->pkg."::ISA"}=@isa;
    mro::set_mro($self->pkg, "c3");
 }
-##################################################################################
 
+sub derived {
+   my ($self)=@_;
+   map { $_->type } @{mro::get_isarev($self->pkg)}
+}
+
+# perl 5.16 had a weird bug in c3 mro
+if ($] < 5.018) {
+   *derived = sub {
+      my ($self)=@_;
+      map { $_->type } grep { not /::SUPER$/ } @{mro::get_isarev($self->pkg)}
+   }
+}
+##################################################################################
 sub add_constructor {
-   my ($self, $name, $code, $arg_types)=@_;
+   my ($self, $name, $label, $code, $arg_types)=@_;
    $self->construct_node //= do {
       create_method_new($self);
-      new Overload::Node(undef, undef, 0);
+      new_root Overload::Node;
    };
-   Overload::add_instance($self->pkg, ".$name", $code, undef, $arg_types, undef, $self->construct_node);
+   Overload::add_instance($self->pkg, ".$name", $label, $code, $arg_types, undef, $self->construct_node);
 }
 
 sub create_method_new : method {
    my ($self)=@_;
-   define_function($self->pkg, "new",
-                   $self->abstract
-                   ? sub {
-                        if (@_>1 && instanceof namespaces::TypeExpression($_[1])) {
-                           # full parameterized type: ready to use
-                           splice @_, 0, 2, @{$_[1]};
-                        } else {
-                           # bare generic name: try to create the type instance with default parameters
-                           splice @_, 0, 1, $self->pkg->typeof();
-                        }
-                        &construct_object
-                     }
-                   : sub {
-                        splice @_, 0, 1, $self;
-                        &construct_object
-                     });
+   if ($self->abstract) {
+      # bare generic name: try to create the type instance with default parameters
+      define_function($self->pkg, "new", sub { splice @_, 0, 1, $self->pkg->typeof(); &construct_object });
+   } else {
+      define_function($self->pkg, "new", sub { splice @_, 0, 1, $self; &construct_object });
+   }
 }
 
 sub construct_object : method {
@@ -180,6 +180,8 @@ sub concrete_typecheck : method {
    ? $self : undef
 }
 
+sub no_typecheck : method { croak( $_[0]->name, " inadvertently involved in overload resolution" ) }
+
 sub descend_to_generic {
    my ($self, $pkg)=@_;
    if (defined $pkg) {
@@ -193,9 +195,9 @@ sub descend_to_generic {
 ##################################################################################
 # used in overload resolution
 sub typecheck : method {
-   my ($self, $arg_list, $arg, $backtrack)=@_;
-   if (defined (my $obj_proto=Overload::fetch_type($arg))) {
-      $self->perform_typecheck->($arg_list, $obj_proto, $backtrack);
+   my ($self, $full_args, $args, $arg_index, $backtrack)=@_;
+   if (defined (my $obj_proto = Overload::fetch_type($args->[$arg_index]))) {
+      $self->perform_typecheck->($full_args, $obj_proto, $backtrack);
    }
 }
 ##################################################################################
@@ -213,110 +215,6 @@ sub add_upgrade_relations {
       $other->upgrades->{$self}=-1;
    }
    $self
-}
-##################################################################################
-sub trivialArray_toXML {
-   my ($value, $writer, @attr)=@_;
-   if (@$value) {
-      $writer->dataElement("v", "@$value", @attr);
-   } else {
-      $writer->emptyTag("v", @attr);
-   }
-}
-
-sub formattedArray_toXML {
-   my ($elem_proto, $value, $writer, @attr)=@_;
-   if (@$value) {
-      $writer->dataElement("v", join(" ", map { $elem_proto->toString->($_) } @$value), @attr);
-   } else {
-      $writer->emptyTag("v", @attr);
-   }
-}
-
-sub nontrivialArray_toXML {
-   my ($elem_proto, $value, $writer, @attr)=@_;
-   my $tag= $elem_proto->dimension ? "m" : "v";
-   if (@$value) {
-      $writer->startTag($tag, @attr);
-      foreach my $elem (@$value) {
-         $elem_proto->toXML->($elem,$writer);
-      }
-      $writer->endTag($tag);
-   } else {
-      $writer->emptyTag($tag, @attr);
-   }
-}
-
-sub sparseArray_toXML {
-   my ($elem_proto, $value, $writer, @attr)=@_;
-   push @attr, dim => $value->dim unless $writer->{"!dim"};
-   my $it=args::entire($value);
-   if ($it) {
-      $writer->startTag("v", @attr);
-      $writer->setDataMode(0);
-      do {
-         $writer->characters(" ");
-         $elem_proto->toXML->($it->deref, $writer, i => $it->index);
-      } while (++$it);
-      $writer->characters(" ");
-      $writer->setDataMode(1);
-      $writer->endTag("v");
-   } else {
-      $writer->emptyTag("v", @attr);
-   }
-}
-
-sub sparseMatrix_toXML {
-   my ($elem_proto, $value, $writer)=@_;
-   if ($value->rows) {
-      local $writer->{"!dim"}=1;
-      nontrivialArray_toXML(@_, cols => $value->cols);
-   } else {
-      $writer->emptyTag("m", @_[3..$#_], cols => $value->cols);
-   }
-}
-
-sub denseMatrix_toXML {
-   my ($elem_proto, $value, $writer)=@_;
-   if ($value->rows) {
-      &nontrivialArray_toXML;
-   } else {
-      $writer->emptyTag("m", @_[3..$#_], cols => $value->cols);
-   }
-}
-
-sub trivialComposite_toXML {
-   my ($value, $writer, @attr)=@_;
-   $writer->dataElement("t", "@$value", @attr);
-}
-
-sub formattedComposite_toXML {
-   my ($elem_protos, $value, $writer, @attr)=@_;
-   my $i=0;
-   $writer->dataElement("t", join(" ", map { $elem_protos->[$i++]->toString->($_) } @$value), @attr);
-}
-
-sub nontrivialComposite_toXML {
-   my ($elem_protos, $value, $writer, @attr)=@_;
-   $writer->startTag("t",@attr);
-   my $i=0;
-   foreach my $elem (@$value) {
-      $elem_protos->[$i++]->toXML->($elem,$writer);
-   }
-   $writer->endTag("t");
-}
-
-sub assocContainer_toXML {
-   my ($pair_proto, $value, $writer, @attr)=@_;
-   if (keys %$value) {
-      $writer->startTag("m",@attr);
-      while (my ($k, $v)=each %$value) {
-         $pair_proto->toXML->([$k,$v],$writer);
-      }
-      $writer->endTag("m");
-   } else {
-      $writer->emptyTag("m");
-   }
 }
 #################################################################################
 # produce a name sufficient for reconstruction from a data file
@@ -361,6 +259,7 @@ use Polymake::Struct (
    [ '$super' => '#2 // #1' ],
    [ '$generic' => '#1' ],
    [ '$params' => '#3' ],
+   '@derived_abstract',
 );
 
 use Polymake::Struct (
@@ -385,10 +284,10 @@ use Polymake::Struct (
 #
 sub new {
    my $self=&_new;
-   Overload::learn_package_retrieval($self, \&PropertyType::pkg);
+   Struct::learn_package_retrieval($self, \&PropertyType::pkg);
    scan_params($self);
    unless ($self->abstract) {
-      if ($self->super && $self->super != $self->generic) {
+      if (defined($self->super) && $self->super != $self->generic) {
          # methods defined for the own generic class have precedence over those from the super class
          my $generic_index=Struct::get_field_index(\&generic);
          foreach my $method (@override_methods) {
@@ -401,8 +300,13 @@ sub new {
       define_function($self->pkg, "type", $self_sub, 1);
       define_function($self->pkg, ".type", $self_sub);
       $self->dimension=$self->super->dimension;
+      $self->operators=$self->super->operators;
       $self->construct_node=$self->super->construct_node;
+      $self->create_method_new();
       establish_inheritance($self, $self->generic, $self->super);
+      if (defined($self->generic->cppoptions)) {
+         $self->application->cpp->add_template_instance($self, $self->generic, $nested_instantiation);
+      }
       $self->init->();
    }
    $self;
@@ -455,25 +359,20 @@ sub new_generic {
    my $min_params=@$params-$n_defaults;
    my $param_index=-1;
    my @param_holders=map { new ClassTypeParam($_, $pkg, $app, ++$param_index) } @$params;
-   my $symtab=get_pkg($pkg);
+   my $symtab=get_symtab($pkg);
    if (!defined($subpkg)) {
       $self=_new_generic($self_pkg, $name, $pkg, $app, $super, \@param_holders);
       if ($super) {
          $self->dimension=$super->dimension;
+         $self->operators=$super->operators;
          if ($self->construct_node=$super->construct_node) {
             $self->create_method_new();
          }
+         push @{$super->derived_abstract}, $self;
+         weak($super->derived_abstract->[-1]);
       }
       $subpkg="props";
    }
-   define_function($symtab, "instanceof",
-                   sub {
-                      if (@_>1 && instanceof namespaces::TypeExpression($_[1])) {
-                         UNIVERSAL::isa($_[2], $_[1]->[0]->pkg);
-                      } else {
-                         UNIVERSAL::isa($_[1], $pkg);
-                      }
-                   });
    define_function($symtab, "_min_params", sub { $min_params });
 
    no strict 'refs';
@@ -533,6 +432,12 @@ sub full_name {
 sub mangled_name {
    $_[0]->pkg =~ /::(\w+)$/;
    $1
+}
+
+# produce a name adhering to the XML name syntax rule, e.g. as a schema element identifier
+sub xml_name {
+   my ($self)=@_;
+   join(".", $self->name, map { $_->xml_name } @{$self->params})
 }
 
 # produce a name sufficient for reconstruction from a data file
@@ -614,6 +519,9 @@ sub new {
    define_function($self->pkg, "type", $self_sub, 1);
    define_function($self->pkg, ".type", $self_sub);
    establish_inheritance($self, $self->generic, $self->super);
+   if (defined($self->generic->cppoptions)) {
+      $self->application->cpp->add_template_instance($self, $self->generic, $nested_instantiation);
+   }
    $self;
 }
 
@@ -653,8 +561,6 @@ sub extract_type : method {
 }
 
 *concrete_type=\&PropertyParamedType::concrete_type;
-
-sub no_typecheck : method { croak( $_[0]->name, " inadvertently involved in overload resolution" ) }
 
 sub full_name {
    my ($self)=@_;
@@ -750,7 +656,7 @@ sub typeof {
       instanceof FunctionTypeParam($_[1])
         or croak( "type_upgrade is only applicable to function type parameters" );
       state %inst_cache;
-      $inst_cache{ $_[1] } ||= &new;
+      $inst_cache{ $_[1] } //= &new;
 
    } elsif (@_==3) {
       # final typecheck clause
@@ -786,22 +692,25 @@ use Polymake::Struct (
    [ '$super' => 'undef' ],
    [ '$generic' => 'undef' ],
    [ '$params' => '[ #1 ]' ],
-   [ '$context_pkg' => '#1->context_pkg' ],
+   [ '$context_pkg' => 'undef' ],
    [ '&perform_typecheck' => '\&check_upgradable' ],
 );
 
 sub new {
    my $self=&_new;
-   $self->abstract= $self->params->[0]->abstract
-                    ? sub : method { $_[0]->params->[0]->abstract->($_[1]) }
-                    : sub : method { $_[0]->params->[0] };
+   if ($self->params->[0]->abstract) {
+      $self->abstract = sub : method { $_[0]->params->[0]->abstract->($_[1]) };
+      $self->context_pkg = $self->params->[0]->context_pkg;
+   } else {
+      $self->abstract = sub : method { $_[0]->params->[0] };
+   }
    $self;
 }
 
 sub typeof {
    @_==2 or croak( "type_upgrades_to requires exactly one type parameter" );
    state %inst_cache;
-   $inst_cache{ $_[1] } ||= &new;
+   $inst_cache{ $_[1] } //= &new;
 }
 
 sub check_upgradable : method {
@@ -817,6 +726,38 @@ sub check_upgradable : method {
 sub type_param_index : method { $_[0]->params->[0]->type_param_index }
 
 #################################################################################
+package Polymake::Core::PropertyType::ConvertTo;
+
+use Polymake::Struct (
+   [ '@ISA' => 'UpgradesTo' ],
+   [ new => '$' ],
+   [ '$name' => '"can_convert_to"' ],
+   [ '&perform_typecheck' => '\&no_typecheck' ],
+);
+
+sub typeof {
+   @_==2 or croak( "can_convert_to requires exactly one type parameter" );
+   state %inst_cache;
+   $inst_cache{ $_[1] } //= &new;
+}
+
+sub typecheck : method {
+   my ($self, $full_args, $args, $arg_index, $backtrack)=@_;
+   if (defined (my $target_proto=$self->abstract->($full_args))) {
+      my $given=$args->[$arg_index];
+      if ($target_proto->isa->($given)) {
+         return $self;
+      }
+      if (defined (my $converted=eval { $target_proto->construct->($given) })) {
+         push @$backtrack, sub { $args->[$arg_index]=$given };
+         $args->[$arg_index]=$converted;
+         return $self;
+      }
+   }
+   undef
+}
+
+#################################################################################
 package main;
 
 # fallback for normal packages without prototype objects
@@ -824,6 +765,7 @@ sub UNIVERSAL::typeof_gen { @_==1 && $_[0] }
 
 *type_upgrades_to::=\%Polymake::Core::PropertyType::UpgradesTo::;
 *type_upgrade::=\%Polymake::Core::PropertyType::Upgrade::;
+*can_convert_to::=\%Polymake::Core::PropertyType::ConvertTo::;
 
 1
 

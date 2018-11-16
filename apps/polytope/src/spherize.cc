@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -30,7 +30,7 @@ perl::Object spherize(perl::Object p_in)
    if (!bounded || !centered)
       throw std::runtime_error("spherize: input polytope must be bounded and centered\n");
 
-   perl::Object p_out(perl::ObjectType::construct<Scalar>("Polytope"));
+   perl::Object p_out("Polytope", mlist<Scalar>());
    p_out.set_description() << "Spherized polytope " << p_in.name() << endl;
 
    const Matrix<double> V=p_in.give("VERTICES | POINTS");
@@ -47,7 +47,7 @@ UserFunctionTemplate4perl("# @category Producing a polytope from polytopes"
                           "# //P// must be [[CENTERED]] and [[BOUNDED]]."
                           "# @param Polytope P"
                           "# @return Polytope"
-                          "# @example The following scales the 2-dimensional cross polytope by 23 and"
+                          "# @example [prefer cdd] The following scales the 2-dimensional cross polytope by 23 and"
                           "# then projects it back onto the unit circle."
                           "# > $p = scale(cross(2),23);"
                           "# > $s = spherize($p);"

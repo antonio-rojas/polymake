@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -20,6 +20,7 @@
 #include "polymake/Matrix.h"
 #include "polymake/Vector.h"
 #include "polymake/IncidenceMatrix.h"
+#include "polymake/common/labels.h"
 
 namespace polymake { namespace polytope {
 
@@ -29,7 +30,7 @@ perl::Object bipyramid(perl::Object p_in, const Scalar& z, const Scalar& z_prime
    if (z*z_prime >= 0) 
       throw std::runtime_error("bipyramid: z and z' must have opposite signs and be non-zero");
 
-   perl::Object p_out(perl::ObjectType::construct<Scalar>("Polytope"));
+   perl::Object p_out("Polytope", mlist<Scalar>());
    p_out.set_description() << "Bipyramid over " << p_in.name() << endl;
 
    const bool noc = options["no_coordinates"],
@@ -64,10 +65,9 @@ perl::Object bipyramid(perl::Object p_in, const Scalar& z, const Scalar& z_prime
       p_out.take("VERTICES") << V_out;
    }
    if (relabel) {
-      std::vector<std::string> labels(n_vertices+2);
-      read_labels(p_in, "VERTEX_LABELS", labels);
-      labels[n_vertices]="Apex";
-      labels[n_vertices+1]="Apex'";
+      std::vector<std::string> labels = common::read_labels(p_in, "VERTEX_LABELS", n_vertices);
+      labels.emplace_back("Apex");
+      labels.emplace_back("Apex'");
       p_out.take("VERTEX_LABELS") << labels;
    }
    return p_out;
@@ -87,10 +87,11 @@ UserFunctionTemplate4perl("# @category Producing a polytope from polytopes"
                           "# @option Bool no_coordinates : don't compute the coordinates, purely combinatorial description is produced."
                           "# @option Bool no_labels Do not copy [[VERTEX_LABELS]] from the original polytope. default: 0"
                           "#  label the new vertices with \"Apex\" and \"Apex'\"."
+                          "# @return Polytope"
                           "# @example Here's a way to construct the 3-dimensional cross polytope:"
                           "# > $p = bipyramid(bipyramid(cube(1)));"
                           "# > print equal_polyhedra($p,cross(3));"
-                          "# | 1",
+                          "# | true",
                           "bipyramid<Scalar>(Polytope<type_upgrade<Scalar>>; type_upgrade<Scalar>=1, type_upgrade<Scalar>=(-$_[1]), {no_coordinates => undef, no_labels => 0})");
 } }
 

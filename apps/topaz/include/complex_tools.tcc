@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -21,127 +21,6 @@
 
 namespace polymake { namespace topaz {
 
-template <typename Complex>
-HasseDiagram hasse_diagram(const Complex& C, const int d, const int end_dim)
-{
-   // sort facets according to their dimension
-   Array< std::list< Set<int> > > facets_of_dim(d+1);
-   int dim=-1;
-
-   for (typename Entire<Complex>::const_iterator c_it=entire(C); !c_it.at_end(); ++c_it) {
-      typename Complex::value_type f=*c_it;
-      while (f.size() > facets_of_dim.size())
-         facets_of_dim.resize(2*facets_of_dim.size());
-      if (f.size()-1 > dim)
-         dim = f.size()-1;
-
-      facets_of_dim[f.size()-1].push_back(f);
-   } 
-
-   // fill the hasse diagram
-   HasseDiagram HD;
-   HasseDiagram::_filler HD_filler(HD,false);
-   HD_filler.add_node(sequence(0,0));           // node #0 is the top node representing the whole complex
-   HD_filler.increase_dim();
-   int face_end_this_dim=1, face_index=1;
-  
-   if (C.empty())                                // if c is empty, then HD is a single node only
-      return HD;
-  
-   FaceMap<> FM;
-   const int last_level= end_dim<0 ? dim + end_dim : end_dim;
-   for (int d=dim; d>=last_level; --d) {
-
-      // add facets of dimension d
-      int i=face_end_this_dim;
-      for (Entire< std::list< Set<int> > >::const_iterator f_it=entire(facets_of_dim[d]);
-           !f_it.at_end(); ++f_it, ++i) {
-         HD_filler.add_node(*f_it);
-         HD_filler.add_edge(i,0);
-      }
-
-      // add faces of dimension d which are not a facet
-      if (d < dim) {
-         while (face_index < face_end_this_dim) {
-            const Subsets_less_1< Set<int> > faces_1_below(HD.face(face_index));
-            // add faces one below
-            for (Entire< Subsets_less_1< Set<int> > >::const_iterator fbi=entire(faces_1_below);
-                 !fbi.at_end(); ++fbi) {
-               int &face = FM[*fbi];
-               if (face==-1) {
-                  face=HD_filler.add_node(*fbi);
-               }
-               HD_filler.add_edge(face, face_index);
-            }
-            ++face_index;
-         }
-      }
-
-      face_end_this_dim=HD.nodes();
-      HD_filler.increase_dim();
-   }
-  
-   HD_filler.add_node(sequence(0,0));  // the bottom node (empty face)
-   while (face_index < face_end_this_dim) {
-      HD_filler.add_edge(face_end_this_dim, face_index);
-      ++face_index;
-   }
-  
-   return HD;
-}
-
-template <typename Complex>
-HasseDiagram pure_hasse_diagram(const Complex& C, const int end_dim)
-{
-   // works for pure complexes only
-   HasseDiagram HD;
-   HasseDiagram::_filler HD_filler(HD,false);
-   HD_filler.add_node(sequence(0,0));           // node #0 is the top node representing the whole complex
-   HD_filler.increase_dim();
-
-   if (C.empty())                                // if c is empty, the HD is a single node only
-      return HD;
-
-   const int dim=C.front().size()-1;
-
-   // add facets of C
-   HD_filler.add_nodes(C.size(), C.begin());
-   HD_filler.increase_dim();
-   int face_index=1, face_end_this_dim=C.size()+1;
-   for (int i=1; i<face_end_this_dim; ++i)
-      HD_filler.add_edge(i,0);
-  
-   // add faces of dimension d= dim-1,..0
-   FaceMap<> FM;
-
-   const int last_level= end_dim<0 ? dim + end_dim : end_dim;
-   for (int d=dim-1; d>=last_level; --d) { 
-      while (face_index < face_end_this_dim) {
-         const Subsets_less_1< Set<int> > faces_1_below(HD.face(face_index));
-         // add faces one below
-         for (Entire< Subsets_less_1< Set<int> > >::const_iterator fbi=entire(faces_1_below);
-              !fbi.at_end(); ++fbi) {
-            int &face = FM[*fbi];
-            if (face==-1) {
-               face=HD_filler.add_node(*fbi);
-            }
-            HD_filler.add_edge(face, face_index);
-         }
-         ++face_index;
-      }
-      face_end_this_dim=HD.nodes();
-      HD_filler.increase_dim();
-   }
-
-   HD_filler.add_node(sequence(0,0));  // the bottom node (empty face)
-   while (face_index < face_end_this_dim) {
-      HD_filler.add_edge(face_end_this_dim, face_index);
-      ++face_index;
-   }
-
-   return HD;
-}
-
 template <typename Complex, typename Set>
 bool adj_numbering(Complex& C, const Set& V)
 {
@@ -153,13 +32,12 @@ bool adj_numbering(Complex& C, const Set& V)
    if (renumber) {
       hash_map<int, int> vertex_map(V.size());
       int count=0;
-      for (typename Entire< Set >::const_iterator s_it=entire(V); !s_it.at_end(); ++s_it, ++count)
+      for (auto s_it=entire(V); !s_it.at_end(); ++s_it, ++count)
          vertex_map[*s_it]=count;
-      
-      for (typename Entire<Complex>::iterator c_it=entire(C); !c_it.at_end(); ++c_it) {
-         typedef typename Complex::value_type Facet;
-         Facet f; 
-         for (typename Entire<Facet>::iterator s_it=entire(*c_it); !s_it.at_end(); ++s_it)
+
+      for (auto c_it=entire(C); !c_it.at_end(); ++c_it) {
+         typename Complex::value_type f;
+         for (auto s_it=entire(*c_it); !s_it.at_end(); ++s_it)
             f += vertex_map[*s_it];
          *c_it = f;
       }
@@ -169,7 +47,7 @@ bool adj_numbering(Complex& C, const Set& V)
 }
 
 template <typename OutputIterator>
-bool is_pseudo_manifold(const HasseDiagram& HD, bool known_pure, OutputIterator boundary_consumer, int *bad_face_p)
+bool is_pseudo_manifold(const Lattice<BasicDecoration>& HD, bool known_pure, OutputIterator boundary_consumer, int *bad_face_p)
 {
    if (HD.in_degree(HD.top_node())==0)
       return true;
@@ -179,14 +57,14 @@ bool is_pseudo_manifold(const HasseDiagram& HD, bool known_pure, OutputIterator 
       return false;
    }
 
-   for (typename Entire<HasseDiagram::nodes_of_dim_set>::const_iterator it=entire(HD.nodes_of_dim(-2)); !it.at_end(); ++it) {
-      const int d = HD.out_degree(*it);
-      if ( d > 2 ) {
-         if (bad_face_p) *bad_face_p=*it;
+   for (const auto n : HD.nodes_of_rank(HD.rank()-2)) {
+      const int d = HD.out_degree(n);
+      if (d > 2) {
+         if (bad_face_p) *bad_face_p=n;
          return false;
       }
-      if (!is_derived_from_instance_of<OutputIterator, pm::black_hole>::value && d == 1 )
-         *boundary_consumer++ = HD.face(*it);
+      if (!is_derived_from_instance_of<OutputIterator, pm::black_hole>::value && d == 1)
+         *boundary_consumer++ = HD.face(n);
    }
 
    return true;

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -66,8 +66,8 @@ void canonicalize_point_configuration(GenericMatrix<TMatrix>& M)
    M = M.minor(~neg,All);
 }
 
-FunctionTemplate4perl("canonicalize_point_configuration(Vector&) : void");
-FunctionTemplate4perl("canonicalize_point_configuration(Matrix&) : void");
+FunctionTemplate4perl("canonicalize_point_configuration(Vector&)");
+FunctionTemplate4perl("canonicalize_point_configuration(Matrix&)");
 
 } }
 

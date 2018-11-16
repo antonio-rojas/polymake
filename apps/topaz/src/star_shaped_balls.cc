@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -17,7 +17,8 @@
 #include "polymake/client.h"
 #include "polymake/Matrix.h"
 #include "polymake/IncidenceMatrix.h"
-#include "polymake/graph/HasseDiagram.h"
+#include "polymake/graph/Lattice.h"
+#include "polymake/graph/Decoration.h"
 #include "polymake/Set.h"
 #include "polymake/hash_set"
 #include "polymake/PowerSet.h"
@@ -50,7 +51,7 @@ bool still_star_shaped_after_extension(const Matrix<Scalar>& vertices,
          if (sign(normal_vector * vertices[s]) != sign(normal_vector[0]))
             // the affine span of (simplex - s) separates s from 0
             return false;
-      } catch (degenerate_matrix) {
+      } catch (const degenerate_matrix&) {
          // this occurs if the affine span of a ridge contains 0
          return false;
       }
@@ -102,7 +103,7 @@ void update_boundary_ridges(const face_type& new_facet,
                             complex_type& new_boundary,
                             complex_type& new_candidate_ridges)
 {
-   for (Entire<Subsets_less_1<const face_type&>>::const_iterator rit = entire(all_subsets_less_1(new_facet)); !rit.at_end(); ++rit) {
+   for (auto rit = entire(all_subsets_less_1(new_facet)); !rit.at_end(); ++rit) {
       const face_type ridge(*rit);
       if (new_boundary.contains(ridge)) {
          new_boundary -= ridge;
@@ -158,7 +159,8 @@ Array<complex_type> star_shaped_balls(perl::Object triangulation)
    else
       vertices = ones_vector<Scalar>(_vertices.rows()) | _vertices; // we work with homogeneous coordinates
 
-   const graph::HasseDiagram HD = triangulation.give("HASSE_DIAGRAM");
+   perl::Object HD_obj = triangulation.give("HASSE_DIAGRAM");
+   const graph::Lattice<graph::lattice::BasicDecoration> HD(HD_obj);
    const Map<face_type, std::vector<int>> link_of_ridge = links_of_ridges(HD);
 
    const complex_type st0(star_of_zero_impl(vertices, facets));
@@ -178,8 +180,8 @@ Array<complex_type> star_shaped_balls(perl::Object triangulation)
    if (!must_rename) return Array<complex_type>(balls_processed.size(), entire(balls_processed));
 
    Array<complex_type> ssb(balls_processed.size());
-   Entire<Array<complex_type>>::iterator oit = entire(ssb);
-   for (Entire<ballhash_type>::const_iterator iit = entire(balls_processed); !iit.at_end(); ++iit, ++oit) {
+   auto oit = entire(ssb);
+   for (auto iit = entire(balls_processed); !iit.at_end(); ++iit, ++oit) {
       complex_type ball;
       for (const auto& s : *iit)
          ball += permuted_inv(s, vertex_indices);
@@ -205,7 +207,7 @@ complex_type star_of_zero(perl::Object triangulation)
    if (!must_rename) return ssz;
 
    complex_type output;
-   for (Entire<complex_type>::const_iterator sit = entire(ssz); !sit.at_end(); ++sit)
+   for (auto sit = entire(ssz); !sit.at_end(); ++sit)
       output += permuted_inv(*sit, vertex_indices);
    return output;
 }

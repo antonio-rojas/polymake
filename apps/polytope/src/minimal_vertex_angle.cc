@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -29,7 +29,7 @@ double minimal_vertex_angle(perl::Object p)
    const int d = origin.dim();
   
    SparseMatrix<double> tau=unit_matrix<double>(d);
-   tau[0].slice(1)=-origin.slice(1);
+   tau[0].slice(range_from(1)) = -origin.slice(range_from(1));
    perl::Object spherical_p=transform<double>(p, tau, false);
    Matrix<double> spherical_V=spherical_p.give("VERTICES");
    spherical_V=spherical_V.minor(All,range(1,d-1));
@@ -53,7 +53,8 @@ UserFunction4perl("# @category Geometry"
                   "# Computes the minimal angle between two vertices of the input polytope //P//."
                   "# @param Polytope P"
                   "# @return Float"
-                  "# @example > print minimal_vertex_angle(simplex(3));"
+                  "# @example"
+                  "# > print minimal_vertex_angle(simplex(3));"
                   "# | 3.14159265358979",
                   &minimal_vertex_angle,"minimal_vertex_angle");
 } }

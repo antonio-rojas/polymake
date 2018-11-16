@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -106,7 +106,15 @@ UserFunction4perl("# @category Producing from scratch\n"
 
 UserFunction4perl("# @category Producing from scratch\n"
 		  "# The complex projective plane with the vertex-minimal triangulation by Kühnel and Brehm.\n"
-		  "# @return SimplicialComplex",
+		  "# @return SimplicialComplex"
+        "# @example Construct the complex projective plane, store it in the variable $p2c, and print its homology group."
+        "# > $p2c = complex_projective_plane();"
+        "# > print $p2c->HOMOLOGY;"
+        "# | ({} 0)"
+        "# | ({} 0)"
+        "# | ({} 1)"
+        "# | ({} 0)"
+        "# | ({} 1)",
 		  &complex_projective_plane, "complex_projective_plane()");
 
 } }

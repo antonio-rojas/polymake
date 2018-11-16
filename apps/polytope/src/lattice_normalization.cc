@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -138,7 +138,8 @@ UserFunction4perl("# @category Transformations"
                   "# | 1 0"
                   "# | 1 1"
                   "# To get the transformation, do the following:"
-                  "# > print $M = $P->get_attachment(REVERSE_LATTICE_PROJECTION);"
+                  "# > $M = $P->get_attachment('REVERSE_LATTICE_PROJECTION');"
+                  "# > print $M;"
                   "# | 1 0 0"
                   "# | 0 1 2"
                   "# > print $P->VERTICES * $M;"

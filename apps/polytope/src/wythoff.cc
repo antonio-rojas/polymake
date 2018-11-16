@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -24,12 +24,17 @@
 #include "polymake/SparseMatrix.h"
 #include "polymake/SparseVector.h"
 #include "polymake/ListMatrix.h"
-#include "polymake/linalg.h"
+#include "polymake/IncidenceMatrix.h"
 #include "polymake/polytope/simple_roots.h"
-#include "polymake/hash_map"
 #include "polymake/list"
+#include "polymake/group/permlib.h"
 #include <sstream>
 #include <vector>
+
+#define TO_WITHOUT_DOUBLE
+#define TO_DISABLE_OUTPUT
+#include "TOSimplex/TOExMipSol.h"
+#include "polymake/common/TOmath_decl.h"
 
 namespace polymake { namespace polytope {
 
@@ -38,7 +43,7 @@ namespace {
 typedef QuadraticExtension<Rational> QE;
 
 template <typename E>
-SparseVector<E> find_initial_point(const Set<int>& rings, const SparseMatrix<E>& R, int d, char type)
+SparseVector<E> find_regular_initial_point(const Set<int>& rings, const SparseMatrix<E>& R, int d, char type)
 {
    SparseMatrix<E> equations (R);
 
@@ -55,8 +60,8 @@ SparseVector<E> find_initial_point(const Set<int>& rings, const SparseMatrix<E>&
        type != 'B' && type != 'b' &&
        type != 'C' && type != 'c' &&
        type != 'F' && type != 'f') {
-      for (Entire<Set<int> >::const_iterator sit = entire(rings); !sit.at_end(); ++sit)
-         equations(*sit, 0) = E(-1); // we look for a point not on any hyperplane indexed by rings, but on all others
+      for (const auto& r: rings)
+         equations(r, 0) = E(-1); // we look for a point not on any hyperplane indexed by rings, but on all others
    } else {
       // the root systems of type B, C, F, G have vectors of different length, so we need to impose equations
       // that put the initial point at equal distance to each ringed hyperplane.
@@ -83,8 +88,8 @@ SparseVector<E> find_initial_point(const Set<int>& rings, const SparseMatrix<E>&
       default:
          throw std::runtime_error("This shouldn't happen");
       }
-      for (Entire<Set<int> >::const_iterator sit = entire(rings); !sit.at_end(); ++sit)
-         equations(*sit, 0) = rhs[*sit]; // we look for a point not on any hyperplane indexed by rings, but on all others
+      for (const auto& r: rings)
+         equations(r, 0) = rhs[r]; // we look for a point not on any hyperplane indexed by rings, but on all others
    } 
    if (type == 'A' || type == 'a')
       equations /= SparseVector<E> (E(0) | ones_vector<E>(d));
@@ -94,26 +99,124 @@ SparseVector<E> find_initial_point(const Set<int>& rings, const SparseMatrix<E>&
 }
 
 template <typename E>
+SparseVector<E> find_integral_initial_point(const Set<int>& rings, const SparseMatrix<E>& R, int d, char type)
+{
+   if ( 'h' == type ||
+        'H' == type )
+      throw std::runtime_error("wythoff: The root systems of type H are not crystallographic, so the roots don't generate a lattice.");
+
+   /*
+     We want the initial point to be a lattice point in the root lattice.
+     For this, we impose the incidences demanded by the set of rings (a point should be off the hyperplane indexed j iff j in rings),
+     and use a MIP solver to make that point an integral combination of the root vectors.
+
+     Let the root vectors be v_i. We need to solve the MIP
+     
+        min sum_j lambda_j
+        s.t.
+        <v_i, x>   = 0     for i notin R
+        <v_i, x>  >= 1     for i in R
+        x = sum_j lambda_j v_j
+        lambda_j >= 0
+        lambda_j in Z
+
+     We rewrite this in terms of the lambda_j:
+
+        min sum_j lambda_j
+        s.t.
+        sum_j lambda_j <v_i,v_j>   = 0    for i notin R
+        sum_l lambda_j <v_i,v_j>  >= 1    for i in R
+        lambda_j >= 0
+        lambda_j in Z
+
+     The subsequent code is lifted from to_mip_lattice_points.cc .
+   */
+
+   const SparseMatrix<E> Gramian(R * T(R));
+
+   const unsigned int numCols = Gramian.rows();	// number of columns/variables
+   TOExMipSol::MIP<E> mip;
+
+   mip.linf = std::vector<bool>( numCols, false );	// true: variable i has no lower bound, false: variable i has lower bound
+   mip.uinf = std::vector<bool>( numCols, false );	// true: variable i has no upper bound, false: variable i has upper bound
+   mip.lbounds = std::vector<E>( numCols, E(0) );	// lower bound for variable i (if any)
+   mip.ubounds = std::vector<E>( numCols, E(1000) );	// upper bound for variable i (if any)
+   mip.numbersystems = std::vector<char>( numCols, 'G' );	// variable i is: G: Integer, B: Binary, R: Real
+   mip.objfunc = std::vector<TOExMipSol::rowElement<E>>();	// objective function (sparse)
+   mip.matrix = std::vector<TOExMipSol::constraint<E>>();	// constraints (sparse)
+   mip.varNames = std::vector<std::string>( numCols );	// names of the variables
+   mip.maximize = false;	// true: maximize, false: minimize
+   
+   // Temporary variables
+   TOExMipSol::constraint<E> row;
+   TOExMipSol::rowElement<E> element;
+
+   for (int i=0; i<Gramian.rows(); ++i) {
+      row.rhs  = rings.contains(i) ? E(1) : E(0);
+      row.type = rings.contains(i) ? 1 : 0; 	// -1: <=, 0: =, 1: >=
+      row.constraintElements = std::vector<TOExMipSol::rowElement<E>>();
+
+      for (auto rit = entire<indexed>(Gramian[i]); !rit.at_end(); ++rit) {
+         element.index = rit.index();
+         element.mult  = *rit;
+         row.constraintElements.push_back( element );
+      }
+      mip.matrix.push_back( row );
+
+      element.index = i;
+      element.mult = E(1);
+      mip.objfunc.push_back( element );
+   }
+
+   // Solver
+   TOExMipSol::TOMipSolver<E> solver;
+
+   // Results go here
+   E objval;
+   std::vector<E> assignment;
+
+   // Solve
+   // second argument true: search all integer feasible solutions, false: only search optimal solution
+   // last argument: contains all solutions discovered during solution process, can be NULL
+   typename TOExMipSol::TOMipSolver<E>::solstatus stat = solver.solve( mip, false, objval, assignment, nullptr );
+
+   if ( stat != TOExMipSol::TOMipSolver<E>::OPTIMAL &&
+        stat != TOExMipSol::TOMipSolver<E>::INFEASIBLE &&
+        stat != TOExMipSol::TOMipSolver<E>::INForUNB ) {
+      throw std::runtime_error("wythoff::find_integral_initial_point: unbounded polyhedron or computation failed");
+   }
+
+   if ( stat == TOExMipSol::TOMipSolver<E>::INFEASIBLE ||
+        stat == TOExMipSol::TOMipSolver<E>::INForUNB ) {
+      throw std::runtime_error("wythoff::find_integral_initial_point: infeasible problem");
+   }
+
+   const Vector<Integer> lambdas (numCols, assignment.begin());
+   Vector<E> solution(lambdas * R);
+   solution[0] = 1;
+   return solution;
+}
+   
+template <typename E>
 SparseMatrix<E> orbit (const SparseVector<E>& p0, 
-                       const SparseMatrix<E>& roots, 
+                       const SparseMatrix<E>& simple_roots, 
                        hash_map<SparseVector<E>, int>& index_of)
 {
    index_of[p0] = 0;
    int new_point_index(1);
-   const int n_roots(roots.rows());
+   const int n_simple_roots(simple_roots.rows());
 
-   typedef std::pair<int, SparseVector<E> > key_type; // (root_index, point) not yet reflected
+   typedef std::pair<int, SparseVector<E>> key_type; // (root_index, point) not yet reflected
    std::list<key_type> point_queue; 
-   for (int i=0; i<n_roots; ++i) 
+   for (int i=0; i<n_simple_roots; ++i) 
       point_queue.push_back(key_type(i, p0)); 
 
    while (!point_queue.empty()) {
       const key_type a(point_queue.front());  point_queue.pop_front();
       const int root_index(a.first);
-      const SparseVector<E>& old_point(a.second);
-      const SparseVector<E> new_point(reflect(old_point, roots[root_index]));
+      const SparseVector<E> new_point(reflect(a.second, simple_roots[root_index]));
       if (!index_of.exists(new_point)) {
-         for (int i=0; i<n_roots; ++i)
+         for (int i=0; i<n_simple_roots; ++i)
             if (i != root_index)
                point_queue.push_back(key_type(i, new_point));
          index_of[new_point] = new_point_index++;
@@ -121,8 +224,8 @@ SparseMatrix<E> orbit (const SparseVector<E>& p0,
    }
 
    SparseMatrix<E> V(index_of.size(), index_of.begin()->first.dim());
-   for (typename Entire<hash_map<SparseVector<E>, int> >::const_iterator mit = entire(index_of); !mit.at_end(); ++mit)
-      V[mit->second] = mit->first;
+   for (const auto& io: index_of)
+      V[io.second] = io.first;
    return V;
 }
 
@@ -131,32 +234,37 @@ SparseMatrix<E> orbit (const SparseVector<E>& p0,
 template <typename E>
 void wythoff(const std::string& type, 
              const Set<int>& rings, 
-             const SparseMatrix<E>& R, 
+             const SparseMatrix<E>& R,
+             const bool lattice,
              SparseMatrix<E>& V, 
-             Array<Array<int> >& generators)
+             Array<Array<int>>& generators)
 {
-   const int n_roots = R.rows();
-   if (accumulate(rings, operations::max()) >= n_roots)
+   const int n_simple_roots = R.rows();
+   if (accumulate(rings, operations::max()) >= n_simple_roots)
       throw std::runtime_error("Set specifies non-existing rows of the root matrix");
    const int d = R.cols()-1;
 
-   const SparseVector<E> p0 = find_initial_point(rings, R, d, type[0]);
+   const SparseVector<E> p0 = lattice
+      ? find_integral_initial_point(rings, R, d, type[0])
+      : find_regular_initial_point (rings, R, d, type[0]);
    if (p0 == unit_vector<E>(d+1, 0))
       throw std::runtime_error("Could not calculate a valid initial point");
 
    hash_map<SparseVector<E>, int> index_of;
    V = orbit(p0, R, index_of);
    const int n_points = V.rows();
-   generators = Array<Array<int> >(n_roots);
-   for (int i=0; i<n_roots; ++i) {
+   generators = Array<Array<int>>(n_simple_roots);
+   for (int i=0; i<n_simple_roots; ++i) {
       Array<int> g(n_points);
       for (int j=0; j<n_points; ++j) 
-         g[j] = index_of[reflect(SparseVector<E>(V.row(j)), R.row(i))];
+         g[j] = index_of[reflect(V.row(j), R.row(i))];
       generators[i] = g;
    }
 }
 
-perl::Object wythoff_dispatcher(std::string type, Set<int> rings)
+perl::Object wythoff_dispatcher(const std::string& type,
+                                const Set<int>& rings,
+                                const bool lattice = false)
 {
    if (type.size() < 2)
       throw std::runtime_error("Type needs single letter followed by rank.");
@@ -166,7 +274,7 @@ perl::Object wythoff_dispatcher(std::string type, Set<int> rings)
    std::istringstream is (type.substr(1));
    is >> n;
 
-   Array<Array<int> > generators;
+   Array<Array<int>> generators;
 
    SparseMatrix<Rational> RM;
    SparseMatrix<QE> EM;
@@ -176,16 +284,17 @@ perl::Object wythoff_dispatcher(std::string type, Set<int> rings)
    if ((t >= 'A' && t <= 'G') || (t >= 'a' && t <= 'g')) {
       if (t == 'A' || t == 'a') {
          if (n >= 1)
-            wythoff<Rational>(type, rings, simple_roots_type_A(n), RM, generators);
+            wythoff<Rational>(type, rings, simple_roots_type_A(n), lattice, RM, generators);
          else
             throw std::runtime_error("Coxeter group of type A requires rank >= 1.");
       } else if (t == 'B' || t == 'b') {
          if (n >= 2) {
             if (rings.size() == 1 ||
-                incl(rings, sequence(0, n-1)) <= 0) {
-               wythoff<Rational>(type, rings, simple_roots_type_B(n), RM, generators);
+                incl(rings, sequence(0, n-1)) <= 0 ||
+                lattice) {
+               wythoff<Rational>(type, rings, simple_roots_type_B(n), lattice, RM, generators);
             } else {
-               wythoff<QE>(type, rings, SparseMatrix<QE>(simple_roots_type_B(n)), EM, generators);
+               wythoff<QE>(type, rings, SparseMatrix<QE>(simple_roots_type_B(n)), lattice, EM, generators);
                needs_QE = true;
             }
          } else
@@ -193,44 +302,46 @@ perl::Object wythoff_dispatcher(std::string type, Set<int> rings)
       } else if (t == 'C' || t == 'c') {
          if (n >= 2) {
             if (rings.size() == 1 ||
-                incl(rings, sequence(0, n-1)) <= 0) {
-               wythoff<Rational>(type, rings, simple_roots_type_C(n), RM, generators);
+                incl(rings, sequence(0, n-1)) <= 0 ||
+                lattice) {
+               wythoff<Rational>(type, rings, simple_roots_type_C(n), lattice, RM, generators);
             } else {
-               wythoff<QE>(type, rings, SparseMatrix<QE>(simple_roots_type_C(n)), EM, generators);
+               wythoff<QE>(type, rings, SparseMatrix<QE>(simple_roots_type_C(n)), lattice, EM, generators);
                needs_QE = true;
             }
          } else
             throw std::runtime_error("Coxeter group of type C requires rank >= 2.");
       } else if (t == 'D' || t == 'd') {
          if (n >= 3)
-            wythoff<Rational>(type, rings, simple_roots_type_D(n), RM, generators);
+            wythoff<Rational>(type, rings, simple_roots_type_D(n), lattice, RM, generators);
          else 
             throw std::runtime_error("Coxeter group of type D requires rank >= 3.");
       } else if (t == 'E' || t == 'e') {
          if (n==6) {
             needs_QE = true;
-            wythoff<QE>(type, rings, simple_roots_type_E6(), EM, generators);
+            wythoff<QE>(type, rings, simple_roots_type_E6(), lattice, EM, generators);
           } else if (n==7){
             needs_QE = true;
-            wythoff<QE>(type, rings, simple_roots_type_E7(), EM, generators);
+            wythoff<QE>(type, rings, simple_roots_type_E7(), lattice, EM, generators);
           } else if (n==8)
-            wythoff<Rational>(type, rings, simple_roots_type_E8(), RM, generators);
+            wythoff<Rational>(type, rings, simple_roots_type_E8(), lattice, RM, generators);
          else throw std::runtime_error("Coxeter group of type E requires rank 6, 7 or 8.");
       }
       else if (t == 'F' || t == 'f') {
          if (n == 4) {
             if (rings.size() == 1 ||
                 incl(rings, sequence(0, 2)) <= 0 ||
-                incl(rings, sequence(2, 2)) <= 0) {
-               wythoff<Rational>(type, rings, simple_roots_type_F4(), RM, generators);
+                incl(rings, sequence(2, 2)) <= 0 ||
+                lattice) {
+               wythoff<Rational>(type, rings, simple_roots_type_F4(), lattice, RM, generators);
             } else {
-               wythoff<QE>(type, rings, SparseMatrix<QE>(simple_roots_type_F4()), EM, generators);
+               wythoff<QE>(type, rings, SparseMatrix<QE>(simple_roots_type_F4()), lattice, EM, generators);
                needs_QE = true;
             }
          } else throw std::runtime_error("Coxeter group of type F requires rank == 4.");
       } else if (t == 'G' || t == 'g') {
          if (n == 2) {
-            wythoff<Rational>(type, rings, simple_roots_type_G2(), RM, generators);
+            wythoff<Rational>(type, rings, simple_roots_type_G2(), lattice, RM, generators);
          } else throw std::runtime_error("Coxeter group of type G requires rank == 2.");
       } else
          throw std::runtime_error("Did not recognize crystallographic Coxeter group.");
@@ -240,11 +351,11 @@ perl::Object wythoff_dispatcher(std::string type, Set<int> rings)
 
       switch(n) {
       case 3: {
-         wythoff<QE>(type, rings, simple_roots_type_H3(), EM, generators);
+         wythoff<QE>(type, rings, simple_roots_type_H3(), lattice, EM, generators);
          break;
       }
       case 4: {
-         wythoff<QE>(type, rings, simple_roots_type_H4(), EM, generators);
+         wythoff<QE>(type, rings, simple_roots_type_H4(), lattice, EM, generators);
          break;
       }
       default:
@@ -281,8 +392,8 @@ perl::Object wythoff_dispatcher(std::string type, Set<int> rings)
    perl::Object a("group::PermutationAction");
    a.take("GENERATORS") << generators;
    perl::Object g("group::Group");
-   g.take("RAYS_ACTION") << a;
    p.take("GROUP") << g;
+   p.take("GROUP.VERTICES_ACTION") << a;
 
    return p;
 }
@@ -296,7 +407,7 @@ perl::Object tetrahedron()
    Matrix<Scalar> RM(same_element_matrix(1,4,4));
    RM(0,2) = RM(0,3) = RM(1,1) = RM(1,3) = RM(2,1) = RM(2,2) = -1;
 
-   perl::Object p(perl::ObjectType::construct<Scalar>("Polytope"));
+   perl::Object p("Polytope", mlist<Scalar>());
    p.set_description() << "regular tetrahedron" << endl;
 
    p.take("VERTICES") << RM;
@@ -412,14 +523,7 @@ perl::Object truncated_icosidodecahedron() {
 }
 
 
-UserFunction4perl("# @category Producing regular polytopes and their generalizations"
-                  "# Produce the orbit polytope of a point under a Coxeter arrangement"
-                  "# with exact coordinates, possibly in a qudratic extension field of the rationals"
-                  "# @param String   type   single letter followed by rank representing the type of the arrangement"
-                  "# @param Set<Int> rings  indices of the hyperplanes corresponding to simple roots of the arrangement"
-		  "# that the initial point should NOT lie on"
-                  "# @return Polytope",
-                  &wythoff_dispatcher, "wythoff($ Set<Int>)");
+Function4perl(&wythoff_dispatcher, "wythoff_dispatcher($ Set<Int>; $=1)");
 
 UserFunctionTemplate4perl("# @category Producing regular polytopes and their generalizations"
                           "# Create regular tetrahedron.  A Platonic solid."

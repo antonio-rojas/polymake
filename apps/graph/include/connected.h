@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -75,7 +75,8 @@ public:
    typedef iterator const_iterator;
 
    connected_components_iterator() {}
-   connected_components_iterator(const TGraph& graph_arg)
+
+   explicit connected_components_iterator(const GenericGraph<TGraph>& graph_arg)
       : base_t(graph_arg)
    {
       rewind();
@@ -115,7 +116,7 @@ template <typename TGraph> inline
 typename std::enable_if<!TGraph::is_directed, IncidenceMatrix<>>::type
 connected_components(const GenericGraph<TGraph>& G)
 {
-   RestrictedIncidenceMatrix<only_cols> m(G.top().dim(), rowwise(), connected_components_iterator<TGraph>(G.top()));
+   RestrictedIncidenceMatrix<only_cols> m(G.top().dim(), rowwise(), connected_components_iterator<TGraph>(G));
    return IncidenceMatrix<>(std::move(m));
 }
 
@@ -124,7 +125,7 @@ template <typename TGraph> inline
 typename std::enable_if<TGraph::is_directed, IncidenceMatrix<>>::type
 weakly_connected_components(const GenericGraph<TGraph>& G)
 {
-   RestrictedIncidenceMatrix<only_cols> m(G.top().dim(), rowwise(), connected_components_iterator<TGraph>(G.top()));
+   RestrictedIncidenceMatrix<only_cols> m(G.top().dim(), rowwise(), connected_components_iterator<TGraph>(G));
    return IncidenceMatrix<>(std::move(m));
 }
 

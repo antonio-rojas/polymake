@@ -24,10 +24,11 @@
 #ifndef CONE_H_
 #define CONE_H_
 
+#include <sys/stat.h>
 #include <vector>
 #include <map>
 #include <utility> //for pair
-//#include <boost/dynamic_bitset.hpp>
+#include <boost/dynamic_bitset.hpp>
 
 #include <libnormaliz/libnormaliz.h>
 #include <libnormaliz/cone_property.h>
@@ -53,6 +54,19 @@ template<typename Integer> struct SHORTSIMPLEX {
                                       // opposite of generator i must be excluded
 };
 
+template<typename Integer>
+bool compareKeys(const SHORTSIMPLEX<Integer>& A, const SHORTSIMPLEX<Integer>& B){
+
+    return(A.key < B.key);
+}
+
+struct STANLEYDATA_int { // for internal use
+    vector<key_t> key;
+    Matrix<long> offsets;
+    vector<long> degrees; // degrees and classNr are used in nmz_integral.cpp
+    size_t classNr;  // number of class of this simplicial cone
+};
+
 template<typename Integer> struct STANLEYDATA {
     vector<key_t> key;
     Matrix<Integer> offsets;
@@ -69,6 +83,8 @@ public:
 //---------------------------------------------------------------------------
 //                    Constructors, they preprocess the input
 //---------------------------------------------------------------------------
+    
+    Cone(); //default constructor
 
     /* give up to 3 matrices as input
      * the types must be pairwise different
@@ -84,6 +100,82 @@ public:
 
     /* give multiple input */
     Cone(const map< InputType , vector< vector<Integer> > >& multi_input_data);
+    
+//-----------------------------------------------------------------------------
+// the same for mpq_class
+    
+    Cone(InputType type, const vector< vector<mpq_class> >& input_data);
+
+    Cone(InputType type1, const vector< vector<mpq_class> >& input_data1,
+         InputType type2, const vector< vector<mpq_class> >& input_data2);
+
+    Cone(InputType type1, const vector< vector<mpq_class> >& input_data1,
+         InputType type2, const vector< vector<mpq_class> >& input_data2,
+         InputType type3, const vector< vector<mpq_class> >& input_data3);
+
+    /* give multiple input */
+    Cone(const map< InputType , vector< vector<mpq_class> > >& multi_input_data);
+    
+//-----------------------------------------------------------------------------
+// the same for nmz_float
+    
+    Cone(InputType type, const vector< vector<nmz_float> >& input_data);
+
+    Cone(InputType type1, const vector< vector<nmz_float> >& input_data1,
+         InputType type2, const vector< vector<nmz_float> >& input_data2);
+
+    Cone(InputType type1, const vector< vector<nmz_float> >& input_data1,
+         InputType type2, const vector< vector<nmz_float> >& input_data2,
+         InputType type3, const vector< vector<nmz_float> >& input_data3);
+
+    /* give multiple input */
+    Cone(const map< InputType , vector< vector<nmz_float> > >& multi_input_data);
+
+//-----------------------------------------------------------------------------
+// Now with Matrix
+    
+    Cone(InputType type, const Matrix<Integer>& input_data);
+
+    Cone(InputType type1, const Matrix<Integer>& input_data1,
+         InputType type2, const Matrix<Integer>& input_data2);
+
+    Cone(InputType type1, const Matrix<Integer>& input_data1,
+         InputType type2, const Matrix<Integer>& input_data2,
+         InputType type3, const Matrix<Integer>& input_data3);
+
+    /* give multiple input */
+    Cone(const map< InputType , Matrix<Integer> >& multi_input_data);
+    
+//-----------------------------------------------------------------------------
+// Now with Matrix and mpq_class
+    
+    Cone(InputType type, const Matrix<mpq_class>& input_data);
+
+    Cone(InputType type1, const Matrix<mpq_class>& input_data1,
+         InputType type2, const Matrix<mpq_class>& input_data2);
+
+    Cone(InputType type1, const Matrix<mpq_class>& input_data1,
+         InputType type2, const Matrix<mpq_class>& input_data2,
+         InputType type3, const Matrix<mpq_class>& input_data3);
+
+    /* give multiple input */
+    Cone(const map< InputType , Matrix<mpq_class> >& multi_input_data);
+    
+//-----------------------------------------------------------------------------
+// Now with Matrix and nmz_float
+    
+    Cone(InputType type, const Matrix<nmz_float>& input_data);
+
+    Cone(InputType type1, const Matrix<nmz_float>& input_data1,
+         InputType type2, const Matrix<nmz_float>& input_data2);
+
+    Cone(InputType type1, const Matrix<nmz_float>& input_data1,
+         InputType type2, const Matrix<nmz_float>& input_data2,
+         InputType type3, const Matrix<nmz_float>& input_data3);
+
+    /* give multiple input */
+    Cone(const map< InputType , Matrix<nmz_float> >& multi_input_data);
+    
     
 //---------------------------------------------------------------------------
 //                                Destructor
@@ -108,9 +200,8 @@ public:
 //---------------------------------------------------------------------------
 
     // return what was NOT computed
-    // ConeProperties compute(ComputationMode mode = Mode::hilbertBasisSeries); //default: everything
+    // special cases for up to 3 CPs
     ConeProperties compute(ConeProperties ToCompute);
-    // special case for up to 3 CPs
     ConeProperties compute(ConeProperty::Enum);
     ConeProperties compute(ConeProperty::Enum, ConeProperty::Enum);
     ConeProperties compute(ConeProperty::Enum, ConeProperty::Enum, ConeProperty::Enum);
@@ -122,6 +213,8 @@ public:
     bool isComputed(ConeProperty::Enum prop) const;
     //returns true, when ALL properties in CheckComputed are computed
     bool isComputed(ConeProperties CheckComputed) const;
+    
+    void resetComputed(ConeProperty::Enum prop);
 
 //---------------------------------------------------------------------------
 //   get the results, these methods will start a computation if necessary
@@ -132,6 +225,7 @@ public:
     size_t getEmbeddingDim() const { return dim; };   // is always known
     size_t getRank();                           // depends on ExtremeRays
     Integer getIndex(); // depends on OriginalMonoidGenerators
+    Integer getInternalIndex(); // = getIndex()
     Integer getUnitGroupIndex(); // ditto
     // only for inhomogeneous case:
     size_t getRecessionRank();
@@ -139,6 +233,8 @@ public:
     size_t getModuleRank();
     
     Cone<Integer>& getIntegerHullCone() const;
+    Cone<Integer>& getSymmetrizedCone() const;
+    Cone<Integer>& getProjectCone() const;
 
     const Matrix<Integer>& getGeneratorsMatrix();
     const vector< vector<Integer> >& getGenerators();
@@ -147,6 +243,14 @@ public:
     const Matrix<Integer>& getExtremeRaysMatrix();
     const vector< vector<Integer> >& getExtremeRays();
     size_t getNrExtremeRays();
+    
+    const Matrix<nmz_float>& getVerticesFloatMatrix();
+    const vector< vector<nmz_float> >& getVerticesFloat();
+    size_t getNrVerticesFloat();
+    
+    const Matrix<nmz_float>& getSuppHypsFloatMatrix();
+    const vector< vector<nmz_float> >& getSuppHypsFloat();
+    size_t getNrSuppHypsFloat();
 
     const Matrix<Integer>& getVerticesOfPolyhedronMatrix();
     const vector< vector<Integer> >& getVerticesOfPolyhedron();
@@ -171,6 +275,7 @@ public:
     Integer getTriangulationDetSum();
 
     vector<Integer> getWitnessNotIntegrallyClosed();
+    vector<Integer> getGeneratorOfInterior();
 
     const Matrix<Integer>& getHilbertBasisMatrix();
     const vector< vector<Integer> >& getHilbertBasis();
@@ -197,12 +302,22 @@ public:
     vector<Integer> getClassGroup();
 
     mpq_class getMultiplicity();
+    mpq_class getVolume();
+    nmz_float getEuclideanVolume();
+    mpq_class getVirtualMultiplicity();
+    mpq_class getIntegral();
+    const pair<HilbertSeries, mpz_class>& getWeightedEhrhartSeries();
+    
+    string getPolynomial() const;
+    
+    bool inequalities_present;
 
     bool isPointed();
     bool isInhomogeneous();
     bool isDeg1ExtremeRays();
     bool isDeg1HilbertBasis();
     bool isIntegrallyClosed();
+    bool isGorenstein();
     bool isReesPrimary();
     Integer getReesPrimaryMultiplicity();
     const Matrix<Integer>& getOriginalMonoidGeneratorsMatrix();
@@ -220,13 +335,62 @@ public:
     const vector< vector<bool> >& getOpenFacets();
     const vector< pair<vector<key_t>, long> >& getInclusionExclusionData();
     const list< STANLEYDATA<Integer> >& getStanleyDec();
+    list< STANLEYDATA_int >& getStanleyDec_mutable(); //allows us to erase the StanleyDec
+                             // in order to save memeory for weighted Ehrhart
+    
+    void set_project(string name);
+    void set_nmz_call(const string& path);
+    void set_output_dir(string name);
+    
+    void setPolynomial(string poly);
+    void setNrCoeffQuasiPol(long nr_coeff);
+    void setExpansionDegree(long degree);
+    
+    bool get_verbose ();
+    
+    IntegrationData& getIntData();
+
+    void resetGrading(vector<Integer> lf);
+
+    const Matrix<Integer>& getMatrixConePropertyMatrix(ConeProperty::Enum property);
+    const vector< vector<Integer> >& getMatrixConeProperty(ConeProperty::Enum property);
+
+    const Matrix<nmz_float>& getFloatMatrixConePropertyMatrix(ConeProperty::Enum property);
+    const vector< vector<nmz_float> >& getFloatMatrixConeProperty(ConeProperty::Enum property);
+    
+    vector<Integer> getVectorConeProperty(ConeProperty::Enum property);
+
+    Integer getIntegerConeProperty(ConeProperty::Enum property);
+
+    mpz_class getGMPIntegerConeProperty(ConeProperty::Enum property);
+    
+    mpq_class getRationalConeProperty(ConeProperty::Enum property);
+
+    nmz_float getFloatConeProperty(ConeProperty::Enum property);
+
+    size_t getMachineIntegerConeProperty(ConeProperty::Enum property);
+
+    bool getBooleanConeProperty(ConeProperty::Enum property);
 
 //---------------------------------------------------------------------------
 //                          private part
 //---------------------------------------------------------------------------
 
 private:
+    
+    string project;
+    string output_dir;
+    string nmz_call;
     size_t dim;
+    bool inhom_input;
+    
+    // the following three matrices store the constraints of the input
+    Matrix<Integer> Inequalities;
+    Matrix<Integer> Equations;
+    Matrix<Integer> Congruences;
+    // we must register some information about thew input
+    bool lattice_ideal_input;
+    size_t nr_latt_gen, nr_cone_gen; // they count matrices in the input 
 
     Sublattice_Representation<Integer> BasisChange;  //always use compose_basis_change() !
     Sublattice_Representation<Integer> BasisChangePointed; // to the pointed cone
@@ -237,9 +401,11 @@ private:
     Matrix<Integer> OriginalMonoidGenerators;
     Matrix<Integer> Generators;
     Matrix<Integer> ExtremeRays;
+    Matrix<nmz_float> VerticesFloat;
     vector<bool> ExtremeRaysIndicator;
     Matrix<Integer> VerticesOfPolyhedron;
     Matrix<Integer> SupportHyperplanes;
+    Matrix<nmz_float> SuppHypsFloat;
     Matrix<Integer> ExcludedFaces;
     Matrix<Integer> PreComputedSupportHyperplanes;
     size_t TriangulationSize;
@@ -248,26 +414,42 @@ private:
     bool triangulation_is_partial;
     vector< pair<vector<key_t>, Integer> > Triangulation;
     vector<vector<bool> > OpenFacets;
+    vector<bool> projection_coord_indicator;
     vector< pair<vector<key_t>, long> > InExData;
-    list< STANLEYDATA<Integer> > StanleyDec;
+    list< STANLEYDATA_int > StanleyDec;
+    list< STANLEYDATA<Integer> > StanleyDec_export;
     mpq_class multiplicity;
+    mpq_class volume;
+    nmz_float euclidean_volume;
+    mpq_class Integral;
+    mpq_class VirtualMultiplicity;
     vector<Integer> WitnessNotIntegrallyClosed;
+    vector<Integer> GeneratorOfInterior;
     Matrix<Integer> HilbertBasis;
+    // Matrix<Integer> HilbertBasisRecCone;
     Matrix<Integer> BasisMaxSubspace;
     Matrix<Integer> ModuleGeneratorsOverOriginalMonoid;
     Matrix<Integer> Deg1Elements;
     HilbertSeries HSeries;
+    IntegrationData IntData;
     vector<Integer> Grading;
     vector<Integer> Dehomogenization;
     Integer GradingDenom;
     Integer index;  // the internal index
     Integer unit_group_index;
+    
+    vector<boost::dynamic_bitset<> > Pair; // for indicator vectors in project-and_lift
+    vector<boost::dynamic_bitset<> > ParaInPair; // if polytope is a parallelotope
+    bool check_parallelotope();
+    bool is_parallelotope;
 
     bool pointed;
     bool inhomogeneous;
+    bool gorensetin;
     bool deg1_extreme_rays;
     bool deg1_hilbert_basis;
     bool integrally_closed;
+    bool Gorenstein;
     bool rees_primary;
     Integer ReesPrimaryMultiplicity;
     int affine_dim; //dimension of polyhedron
@@ -275,6 +457,9 @@ private:
     size_t module_rank; // for the inhomogeneous case
     Matrix<Integer> ModuleGenerators;
     vector<Integer> ClassGroup;
+    
+    bool is_approximation;
+    Cone* ApproximatedCone;
 
     Matrix<Integer> WeightsGrad;
     vector<bool> GradAbs;
@@ -285,15 +470,24 @@ private:
     // if this is true we allow to change to a smaller integer type in the computation
     bool change_integer_type;
     
-    Cone<Integer>* IntHullCone;
+    Cone<Integer>* IntHullCone; // cone containing data of integer hull
+    Cone<Integer>* SymmCone;    // cone containing symmetrized data
+    Cone<Integer>* ProjCone;    // cone containing projection to selected coordinates 
+    
+    // In cone based algorithms we use the following information
+    bool Grading_Is_Coordinate; // indicates that the grading or dehomogenization is a coordinate
+    key_t GradingCoordinate;  // namely this one
 
     void compose_basis_change(const Sublattice_Representation<Integer>& SR); // composes SR
 
     // main input processing
     void process_multi_input(const map< InputType, vector< vector<Integer> > >& multi_input_data);
+    void process_multi_input_inner(map< InputType, vector< vector<Integer> > >& multi_input_data);
+    void process_multi_input(const map< InputType, vector< vector<mpq_class> > >& multi_input_data);
+    void process_multi_input(const map< InputType, vector< vector<nmz_float> > >& multi_input_data);
+    
     void prepare_input_lattice_ideal(map< InputType, vector< vector<Integer> > >& multi_input_data);
-    void prepare_input_constraints(const map< InputType, vector< vector<Integer> > >& multi_input_data,
-            Matrix<Integer>& equations, Matrix<Integer>& congruence, Matrix<Integer>& Inequalities);
+    void prepare_input_constraints(const map< InputType, vector< vector<Integer> > >& multi_input_data);
     void prepare_input_generators(map< InputType, vector< vector<Integer> > >& multi_input_data,
                      Matrix<Integer>& LatticeGenerators);
     void homogenize_input(map< InputType, vector< vector<Integer> > >& multi_input_data);
@@ -307,16 +501,19 @@ private:
     void checkDehomogenization();
     void check_vanishing_of_grading_and_dehom();
     void process_lattice_data(const Matrix<Integer>& LatticeGenerators, Matrix<Integer>& Congruences, Matrix<Integer>& Equations);
+    
+    void try_symmetrization(ConeProperties& ToCompute);
+    void try_approximation_or_projection (ConeProperties& ToCompute);
 
     Matrix<Integer> prepare_input_type_2(const vector< vector<Integer> >& Input);
     Matrix<Integer> prepare_input_type_3(const vector< vector<Integer> >& Input);
-    void prepare_input_type_4(Matrix<Integer>& Inequalities);
+    void insert_default_inequalities(Matrix<Integer>& Inequalities);
 
     /* only used by the constructors */
     void initialize();
 
     template<typename IntegerFC>
-    void compute_inner(ConeProperties& ToCompute);
+    void compute_full_cone(ConeProperties& ToCompute);
 
     /* compute the generators using the support hyperplanes */
     void compute_generators();
@@ -327,6 +524,8 @@ private:
     void compute_dual(ConeProperties& ToCompute);
     template<typename IntegerFC>
     void compute_dual_inner(ConeProperties& ToCompute);
+    
+    void set_implicit_dual_mode(ConeProperties& ToCompute);
 
     /* extract the data from Full_Cone, this may remove data from Full_Cone!*/
     template<typename IntegerFC>
@@ -349,13 +548,49 @@ private:
     void compute_unit_group_index();
     /* try to find a witness for not integrally closed in the Hilbert basis */
     void find_witness();
+    
+    void check_Gorenstein (ConeProperties&  ToCompute);
 
     Integer compute_primary_multiplicity();
     template<typename IntegerFC>
     Integer compute_primary_multiplicity_inner();
     
     void compute_integer_hull();
+    void complete_sublattice_comp(ConeProperties& ToCompute); // completes the sublattice computations
+    void complete_HilbertSeries_comp(ConeProperties& ToCompute);
+    
+    void treat_polytope_as_being_hom_defined(ConeProperties ToCompute);
+    
+    void compute_integral (ConeProperties& ToCompute);
+    void compute_virt_mult (ConeProperties& ToCompute);
+    void compute_weighted_Ehrhart(ConeProperties& ToCompute);
+    
+    void compute_vertices_float(ConeProperties& ToCompute);
+    void compute_supp_hyps_float(ConeProperties& ToCompute);
+    
+    void make_StanleyDec_export();
+    
+    void NotComputable (string message); // throws NotComputableException if default_mode = false
+    
+    void set_parallelization();
+    
+    template<typename IntegerFC>
+    void give_data_of_approximated_cone_to(Full_Cone<IntegerFC>& FC);
+    
+    void project_and_lift(ConeProperties& ToCompute, Matrix<Integer>& Deg1, const Matrix<Integer>& Gens, Matrix<Integer>& Supps, bool float_projection);
 
+    void compute_volume(ConeProperties& ToCompute);
+    void compute_euclidean_volume(const vector<Integer>& Grad, Integer GradDenom);
+    
+    void try_multiplicity_by_descent(ConeProperties& ToCompute);
+    
+    void compute_projection(ConeProperties& ToCompute);
+    void compute_projection_from_gens(const vector<Integer>& GradOrDehom);
+    void compute_projection_from_constraints(const vector<Integer>& GradOrDehom);
+ 
+    //in order to avoid getRank fromm inside compute
+    size_t get_rank_internal();
+    const Sublattice_Representation<Integer>& get_sublattice_internal();
 };
 
 // helpers
@@ -369,6 +604,78 @@ void insert_zero_column(vector< vector<Integer> >& mat, size_t col);
 
 template<typename Integer>
 void insert_column(vector< vector<Integer> >& mat, size_t col, Integer entry);
+
+// computes approximating lattice simplex using the A_n dissection of the unit cube
+// q is a rational vector with the denominator in the FIRST component q[0]
+template<typename Integer>
+void approx_simplex(const vector<Integer>& q, std::list<vector<Integer> >& approx, const long approx_level){
+	
+	//cout << "approximate the point " << q;
+    long dim=q.size();
+    long l = approx_level;
+    //if (approx_level>q[0]) l=q[0]; // approximating on level q[0](=grading) is the best we can do
+    // TODO in this case, skip the rest and just approximate on q[0]
+    Matrix<Integer> quot =  Matrix<Integer>(l,dim);
+    Matrix<Integer> remain=Matrix<Integer>(l,dim);
+    for(long j=0;j<approx_level;j++){
+	    for(long i=0;i<dim;++i){
+	        quot[j][i]=(q[i]*(j+1))/q[0];          // write q[i]=quot*q[0]+remain
+	        //quot[j][0] = 1;
+	        remain[j][i]=(q[i]*(j+1))%q[0];  // with 0 <= remain < q[0]
+	        if(remain[j][i]<0){
+	            remain[j][i]+=q[0];
+	            quot[j][i]--;
+	        }
+	          
+	    }
+	    v_make_prime(quot[j]);
+	    remain[j][0]=q[0];  // helps to avoid special treatment of i=0
+	}
+	// choose best level
+	//cout << "this is the qout matrix" << endl;
+	//quot.pretty_print(cout);
+	//cout << "this is the remain matrix" << endl;
+	//remain.pretty_print(cout);
+	long best_level=l-1;
+	vector<long> nr_zeros(l);
+	for(long j=l-1;j>=0;j--){
+		for(long i=0;i<dim;++i){
+			if(remain[j][i]==0) nr_zeros[j]++;
+		}
+		if (nr_zeros[j]>nr_zeros[best_level]) best_level=j;
+	}
+	//cout << "the best level is " << (best_level+1) << endl;
+	//now we proceed as before
+	vector<pair<Integer,size_t> > best_remain(dim);
+	for(long i=0;i<dim;i++){
+		best_remain[i].first = remain[best_level][i];
+		best_remain[i].second = i; // after sorting we must lnow where elements come from
+	}
+
+    sort(best_remain.begin(),best_remain.end()); 
+    reverse(best_remain.begin(),best_remain.end()); // we sort remain into descending order
+    
+    /*for(long i=0;i<dim;++i){
+        cout << remain[i].first << " " << remain[i].second << endl;
+    } */
+    
+    for(long i=1;i<dim;++i){
+        if(best_remain[i].first<best_remain[i-1].first)
+        {
+            approx.push_back(quot[best_level]);
+            //cout << "add the point " << quot[best_level];
+            // cout << i << " + " << remain[i].first << " + " << quot << endl;
+        }
+        quot[best_level][best_remain[i].second]++;    
+    }
+    if(best_remain[dim-1].first > 0){
+        // cout << "E " << quot << endl;
+        approx.push_back(quot[best_level]);
+        //cout << "add the point " << quot[best_level];
+    }
+
+}
+
 
 }  //end namespace libnormaliz
 

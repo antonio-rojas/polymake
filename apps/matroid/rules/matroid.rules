@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -17,7 +17,7 @@ object Matroid {
 
 rule RANK : BASES {
   $this->RANK = $this->BASES->[0]->size();
-} 
+}
 weight 0.1;
 
 rule BASES, N_BASES, RANK, N_ELEMENTS : VECTORS {
@@ -51,7 +51,7 @@ rule POLYTOPE.FEASIBLE : N_BASES {
 weight 0.10;
 
 rule POLYTOPE.BOUNDED : {
-   $this->POLYTOPE->BOUNDED = 1;
+   $this->POLYTOPE->BOUNDED = true;
 }
 weight 0.10;
 
@@ -60,8 +60,10 @@ rule POLYTOPE.VERTICES, POLYTOPE.CONE_AMBIENT_DIM, POLYTOPE.FEASIBLE, POLYTOPE.B
 }
 weight 1.12;
 
+rule POLYTOPE.VertexPerm.PERMUTATION = BasesPerm.PERMUTATION;
+
 rule POLYTOPE.VERTICES, POLYTOPE.CONE_AMBIENT_DIM, POLYTOPE.INEQUALITIES, POLYTOPE.EQUATIONS, POLYTOPE.FEASIBLE, POLYTOPE.BOUNDED: BASES, N_ELEMENTS, RANK, CONNECTED, LATTICE_OF_FLATS {
-   polytope::matroid_polytope($this, inequalities=>1)
+   polytope::matroid_polytope($this, inequalities=>true)
 }
 precondition : CONNECTED;
 weight 1.10;
@@ -143,7 +145,7 @@ weight 0.1;
 
 rule BASES, MAXIMAL_TRANSVERSAL_PRESENTATION : N_ELEMENTS, TRANSVERSAL_PRESENTATION {
    #Create bipartite graph from edges
-   # Elements from the ground set are nodes 0,..,n-1. 
+   # Elements from the ground set are nodes 0,..,n-1.
    # Sets from the set system are nodes n,..,n+k
    my @edges = ();
    my $n = $this->N_ELEMENTS;
@@ -159,11 +161,11 @@ rule BASES, MAXIMAL_TRANSVERSAL_PRESENTATION : N_ELEMENTS, TRANSVERSAL_PRESENTAT
    my $maxverts = new Matrix<Rational>($p->VERTICES->minor($p->LP->MAXIMAL_FACE,~[0]));
    my @basislist = map { new Set<Int>(map {  min(@{$g->EDGES->[$_]}) } @{support($_)}) } @{rows($maxverts)};
    #Need to make the list of bases irredundant, some might occur multiple times
-   $this->BASES = new Array<Set<Int> >( new Set<Set<Int> >(\@basislist));
+   $this->BASES = new Array<Set<Int>>( new Set<Set<Int>>(\@basislist));
    if($maxverts->rows() > 0) {
       my $one_matching = new Set<Int>( map { max(@{$g->EDGES->[$_]}) - $n} @{support($maxverts->row(0))});
-      $this->MAXIMAL_TRANSVERSAL_PRESENTATION = 
-      maximal_transversal_presentation($n,$this->BASES,$tp, $one_matching); 
+      $this->MAXIMAL_TRANSVERSAL_PRESENTATION =
+      maximal_transversal_presentation($n,$this->BASES,$tp, $one_matching);
    }
    else {
       $this->MAXIMAL_TRANSVERSAL_PRESENTATION = new IncidenceMatrix(0,$this->N_ELEMENTS);
@@ -185,7 +187,7 @@ rule TRANSVERSAL, TRANSVERSAL_PRESENTATION : N_ELEMENTS, RANK, LOOPS, LATTICE_OF
       $this->TRANSVERSAL_PRESENTATION = $a[1];
    }
    else {
-      $this->TRANSVERSAL_PRESENTATION = new Array<Set<Int> >();
+      $this->TRANSVERSAL_PRESENTATION = new Array<Set<Int>>();
    }
 }
 weight 2.10;
@@ -231,7 +233,7 @@ rule TERNARY, TERNARY_VECTORS : BASES, N_ELEMENTS, RANK {
 weight 5.10;
 
 rule REGULAR : BINARY, TERNARY {
-    $this->REGULAR=$this->BINARY && $this->TERNARY; # See [Oxley:matroid theory (2nd ed.) Thm. 6.6.3]
+    $this->REGULAR=$this->BINARY && $this->TERNARY; # See [Oxley:Matroid theory (2nd ed.) Thm. 6.6.3]
 }
 weight 0.1;
 
@@ -239,16 +241,14 @@ rule VECTORS : BINARY_VECTORS, TERNARY_VECTORS {
    #Normalize such that entries 0,1(,2) are used for binary/ternary rep
    my $normalized_ternary = new Matrix( [ map { [map {$_ % 3} @{$_}]} @{rows($this->TERNARY_VECTORS)}]);
    my $normalized_binary  = new Matrix( [ map { [map {$_ % 2} @{$_}]} @{rows($this->BINARY_VECTORS)}]);
-   $this->VECTORS=3*($normalized_binary)-2*($normalized_ternary); 
+   $this->VECTORS=3*($normalized_binary)-2*($normalized_ternary);
 }
 precondition : REGULAR;
 weight 1.10;
 
 rule TUTTE_POLYNOMIAL: CIRCUITS, N_ELEMENTS {
-    my $ring=new Ring(qw(x y));
     $this->TUTTE_POLYNOMIAL = tutte_polynomial_from_circuits( $this->N_ELEMENTS,
-                                                              $this->CIRCUITS,
-                                                              $ring);
+                                                              $this->CIRCUITS);
 }
 weight 5.10;
 
@@ -296,7 +296,7 @@ rule UNIFORM : N_ELEMENTS, RANK, N_BASES {
 }
 weight 0.10;
 
-rule LATTICE_OF_FLATS : MATROID_HYPERPLANES, N_ELEMENTS {
+rule LATTICE_OF_FLATS.ADJACENCY, LATTICE_OF_FLATS.DECORATION, LATTICE_OF_FLATS.INVERSE_RANK_MAP, LATTICE_OF_FLATS.TOP_NODE, LATTICE_OF_FLATS.BOTTOM_NODE : MATROID_HYPERPLANES, N_ELEMENTS, RANK {
 	my $hy;
 	#A rank-0-matroid has no hyperplanes, so we need to treat this separately
 	if($this->MATROID_HYPERPLANES->size() == 0) {
@@ -306,21 +306,21 @@ rule LATTICE_OF_FLATS : MATROID_HYPERPLANES, N_ELEMENTS {
 		#If the empty set is a hyperplane, we need to tell the incidence matrix its dimension.
 		$hy=new IncidenceMatrix<NonSymmetric>(@{$this->MATROID_HYPERPLANES}, $this->N_ELEMENTS);
 	}
-	$this->LATTICE_OF_FLATS = lattice_of_flats($hy);
+	$this->LATTICE_OF_FLATS = lattice_of_flats($hy, $this->RANK);
 }
 weight 6.20;
 
 rule MATROID_HYPERPLANES, N_ELEMENTS, RANK : LATTICE_OF_FLATS {
    my $lof = $this->LATTICE_OF_FLATS;
-   $this->N_ELEMENTS = $lof->FACES->[$lof->top_node()]->size();
-   my $rank = $this->LATTICE_OF_FLATS->dim();
+   $this->N_ELEMENTS = $lof->FACES->[$lof->TOP_NODE]->size();
+   my $rank = $this->LATTICE_OF_FLATS->rank();
    $this->RANK = max(0,$rank);
    if($rank  <= 0 ) {
-      $this->MATROID_HYPERPLANES = new Array<Set<Int>>(); 
+      $this->MATROID_HYPERPLANES = new Array<Set<Int>>();
    }
    else {
       $this->MATROID_HYPERPLANES = new Array<Set<Int>> ([
-         map {$lof->FACES->[$_]} @{$lof->nodes_of_dim($rank-1)}
+         map {$lof->FACES->[$_]} @{$lof->nodes_of_rank($rank-1)}
          ]);
    }
 }
@@ -332,7 +332,7 @@ rule N_FLATS : LATTICE_OF_FLATS {
 }
 weight 0.10;
 
-rule LATTICE_OF_CYCLIC_FLATS : LATTICE_OF_FLATS, CIRCUITS, RANK {
+rule LATTICE_OF_CYCLIC_FLATS.ADJACENCY, LATTICE_OF_CYCLIC_FLATS.DECORATION, LATTICE_OF_CYCLIC_FLATS.INVERSE_RANK_MAP, LATTICE_OF_CYCLIC_FLATS.TOP_NODE, LATTICE_OF_CYCLIC_FLATS.BOTTOM_NODE : LATTICE_OF_FLATS, CIRCUITS, RANK {
    $this->LATTICE_OF_CYCLIC_FLATS = lattice_of_cyclic_flats($this);
 }
 weight 6.20;
@@ -344,8 +344,8 @@ weight 0.10;
 
 rule BASES, RANK : LATTICE_OF_CYCLIC_FLATS, N_ELEMENTS {
    my $loc = $this->LATTICE_OF_CYCLIC_FLATS;
-   $this->RANK = $loc->dim() + 1 + $this->N_ELEMENTS - $loc->FACES->[$loc->top_node()]->size();
-   $this->BASES = bases_from_cyclic_flats($this->N_ELEMENTS, $this->RANK, $this->LATTICE_OF_CYCLIC_FLATS);
+   $this->RANK = $loc->rank() + $this->N_ELEMENTS - $loc->DECORATION->[$loc->TOP_NODE]->face->size();
+   $this->BASES = bases_from_cyclic_flats($this->N_ELEMENTS, $this->RANK, $loc);
 }
 weight 6.10;
 
@@ -452,20 +452,24 @@ weight 3.10;
 # The following four are mainly for backwards compat and convenience, since cocircuits and coloops
 # are common terms. However, we want to avoid duplicating data.
 
+# @category Axiom systems
 user_method COCIRCUITS {
-   return shift->DUAL->CIRCUITS;   
+   return shift->DUAL->CIRCUITS;
 }
 
+# @category Enumerative properties
 user_method N_COCIRCUITS {
-   return shift->DUAL->N_CIRCUITS;   
+   return shift->DUAL->N_CIRCUITS;
 }
 
+# @category Axiom systems
 user_method COLOOPS {
-   return shift->DUAL->LOOPS;   
+   return shift->DUAL->LOOPS;
 }
 
+# @category Enumerative properties
 user_method N_COLOOPS {
-   return shift->DUAL->N_LOOPS;   
+   return shift->DUAL->N_LOOPS;
 }
 
 
@@ -498,7 +502,7 @@ user_method is_isomorphic_to(Matroid) {
 # @category Producing a matroid from matroids
 # Produces the __dual__ of a given matroid //m//.
 # Not quite the same as calling m->[[DUAL]]. The latter returns a subobject and properties of this subobject
-# are only computed upon demand. 
+# are only computed upon demand.
 # This function returns the dual as an independent object by computing its [[BASES]].
 # @param Matroid m"
 # @return Matroid"
@@ -510,7 +514,7 @@ user_function dual(Matroid) {
 # @category Other
 # calculate the internal activity of a base with respect to a given ordering of all bases.
 # Let the given base B = B_j be the j-th one in the given ordering B_1, B_2, ...
-# The internal activity of B_j is the number of "necessary" elements in B_j, 
+# The internal activity of B_j is the number of "necessary" elements in B_j,
 # i.e., the number of elements i in B_j such that B_j - {i} is not a subset of any B_k, k<j.
 # @return Int
 user_function internal_activity(Set<Int>, Array<Set<Int>>) {

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -17,10 +17,10 @@
 #ifndef __GROUP_REPRESENTATIONS_H
 #define __GROUP_REPRESENTATIONS_H
 
-#include "polymake/group/action_datatypes.h"
+#include "polymake/Array.h"
+#include "polymake/hash_map"
 #include "polymake/SparseMatrix.h"
 #include "polymake/Rational.h"
-
 
 namespace polymake { namespace group {
 
@@ -41,19 +41,19 @@ protected:
    }
 
 public:
-   InducedAction(int degree, 
-                 const Array<SetType>& domain, 
-                 const hash_map<SetType, int>& index_of)
-      : degree(degree)
-      , domain(domain)
-      , index_of(index_of) 
+   InducedAction(int degree_,
+                 const Array<SetType>& domain_,
+                 const hash_map<SetType, int>& index_of_)
+      : degree(degree_)
+      , domain(domain_)
+      , index_of(index_of_)
    {}
 
    int index_of_image(const Array<int>& perm,
                       const SetType& elt) const {
       SetType image;
       image.resize(perm.size());
-      for (typename Entire<SetType>::const_iterator sit = entire(elt); !sit.at_end(); ++sit)
+      for (auto sit = entire(elt); !sit.at_end(); ++sit)
          image += perm[*sit];
       return index_of.at(image);
    }
@@ -63,7 +63,7 @@ public:
       Array<int> inv_perm(inverse_permutation(perm));
       SetType inv_image;
       inv_image.resize(inv_perm.size());
-      for (typename Entire<SetType>::const_iterator sit = entire(elt); !sit.at_end(); ++sit)
+      for (auto sit = entire(elt); !sit.at_end(); ++sit)
          inv_image += inv_perm[*sit];
       return index_of.at(inv_image);
    }
@@ -76,7 +76,7 @@ public:
    SparseMatrix<Rational> induced_rep(const Array<int>& perm) const {
       SparseMatrix<Rational> induced_rep(degree, degree);
       int col_index(0);
-      for (typename Entire<Array<SetType> >::const_iterator dit = entire(domain); !dit.at_end(); ++dit, ++col_index) {
+      for (auto dit = entire(domain); !dit.at_end(); ++dit, ++col_index) {
          induced_rep(index_of_image(perm, *dit), col_index) = 1;
       }
       return induced_rep;

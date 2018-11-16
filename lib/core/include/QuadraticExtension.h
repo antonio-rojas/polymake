@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -118,6 +118,7 @@ public:
       _b = val[1];
       _r = val[2];
       normalize();
+      return *this;
    }
 
    const Field& a() const { return _a; }
@@ -733,6 +734,22 @@ int sign(const QuadraticExtension<Field>& x)
    return tmp > x.r() ? sa : sb;
 }
 
+template <typename Field>
+Integer floor(const QuadraticExtension<Field>& x)
+{
+   AccurateFloat f(sqrt(AccurateFloat(x.r())));
+   f *= x.b(); f += x.a();
+   return Integer(floor(f));
+}
+
+template <typename Field>
+Integer ceil(const QuadraticExtension<Field>& x)
+{
+   AccurateFloat f(sqrt(AccurateFloat(x.r())));
+   f *= x.b(); f += x.a();
+   return Integer(ceil(f));
+}
+   
 template <typename Field, typename T,
           typename=typename std::enable_if<QuadraticExtension<Field>::template fits_as_particle<T>::value>::type>
 inline
@@ -824,7 +841,9 @@ struct hash_func<QuadraticExtension<Field>, is_scalar> : hash_func<Field> {
 protected:
    size_t impl(const QuadraticExtension<Field>& x) const
    {
-      return base_t::operator()(x.a()) + base_t::operator()(x.b());
+      size_t h=base_t::operator()(x.a());
+      hash_combine(h, base_t::operator()(x.b()));
+      return h;
    }
 public:
    size_t operator() (const QuadraticExtension<Field>& x) const { return isfinite(x) ? impl(x) : 0; }

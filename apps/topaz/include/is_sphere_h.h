@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -22,25 +22,26 @@
 #include "polymake/topaz/BistellarComplex.h"
 #include "polymake/topaz/SimplicialComplex_as_FaceMap.h"
 #include "polymake/topaz/HomologyComplex.h"
+#include "polymake/topaz/hasse_diagram.h"
 
 namespace polymake { namespace topaz {
 
 // return values: 1=true, 0=false, -1=undef
-  
-int is_sphere_h(const HasseDiagram& HD, const pm::SharedRandomState& random_source, const int strategy, const int n_stable_rounds);
+
+int is_sphere_h(const Lattice<BasicDecoration>& HD, const pm::SharedRandomState& random_source, const int strategy, const int n_stable_rounds);
 
 template <typename Complex>
 int is_sphere_h(const Complex& C, const pm::SharedRandomState& random_source, const int strategy, const int n_stable_rounds)
 {
-   return is_sphere_h(pure_hasse_diagram(C), random_source, strategy, n_stable_rounds);
+   return is_sphere_h(hasse_diagram_from_facets(Array<Set<int> >(C)), random_source, strategy, n_stable_rounds);
 }
 
-int is_ball_or_sphere_h(const HasseDiagram& HD, const pm::SharedRandomState& random_source, const int strategy, const int n_stable_rounds);
+int is_ball_or_sphere_h(const Lattice<BasicDecoration>& HD, const pm::SharedRandomState& random_source, const int strategy, const int n_stable_rounds);
 
 template <typename Complex>
 int is_ball_or_sphere_h(const Complex& C, const pm::SharedRandomState& random_source, const int strategy, const int n_stable_rounds)
 {
-   return is_ball_or_sphere_h(pure_hasse_diagram(C), random_source, strategy, n_stable_rounds);
+   return is_ball_or_sphere_h(hasse_diagram_from_facets(Array<Set<int> >(C)), random_source, strategy, n_stable_rounds);
 }
 
 } }

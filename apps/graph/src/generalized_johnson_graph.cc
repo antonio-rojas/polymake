@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -40,7 +40,7 @@ perl::Object generalized_johnson_graph (const int n,const int k,const int i) {
    int ct(0);
    auto lit = entire(labels);
    std::ostringstream os;
-   for (Entire<Subsets_of_k<const sequence&> >::const_iterator sit = entire(all_subsets_of_k(sequence(0,n), k)); !sit.at_end(); ++sit, ++lit) {
+   for (auto sit = entire(all_subsets_of_k(sequence(0,n), k)); !sit.at_end(); ++sit, ++lit) {
       const Set<int> the_set(*sit);
       index_of[the_set] = ct++;
       wrap(os) << the_set;
@@ -77,7 +77,16 @@ UserFunction4perl("# @category Producing a graph"
                   "# @param Int n the size of the ground set"
                   "# @param Int k the size of the subsets"
                   "# @param Int i the size of the subsets"
-                  "# @return Graph",
+                  "# @return Graph"
+                  "# @example The following prints the adjacency representation of the generalized"
+                  "# johnson graph with the parameters 4,2,1:"
+                  "# > print generalized_johnson_graph(4,2,1)->ADJACENCY;"
+                  "# | {1 2 3 4}"
+                  "# | {0 2 3 5}"
+                  "# | {0 1 4 5}"
+                  "# | {0 1 4 5}"
+                  "# | {0 2 3 5}"
+                  "# | {1 2 3 4}",
                   &generalized_johnson_graph, "generalized_johnson_graph($$$)");
 
 UserFunction4perl("# @category Producing a graph"
@@ -86,7 +95,13 @@ UserFunction4perl("# @category Producing a graph"
                   "#   and an edge between two nodes iff the corresponding subsets are disjoint."
                   "# @param Int n the size of the ground set"
                   "# @param Int k the size of the subsets"
-                  "# @return Graph",
+                  "# @return Graph"
+                  "# @example The following prints the adjacency representation of the kneser"
+                  "# graph with the parameters 3,1:"
+                  "# > print kneser_graph(3,1)->ADJACENCY;"
+                  "# | {1 2}"
+                  "# | {0 2}"
+                  "# | {0 1}",
                   &kneser_graph, "kneser_graph($$)");
 
 
@@ -96,7 +111,14 @@ UserFunction4perl("# @category Producing a graph"
                   "#   and an edge between two nodes iff the intersection of the corresponding subsets is of size k-1."
                   "# @param Int n the size of the ground set"
                   "# @param Int k the size of the subsets"
-                  "# @return Graph",
+                  "# @return Graph"
+                  "# @example The following prints the adjacency representation of the johnson"
+                  "# graph with the parameters 4,3:"
+                  "# > print johnson_graph(4,3)->ADJACENCY;"
+                  "# | {1 2 3}"
+                  "# | {0 2 3}"
+                  "# | {0 1 3}"
+                  "# | {0 1 2}",
                   &johnson_graph, "johnson_graph($$)");
 
 } }

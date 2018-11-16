@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -59,7 +59,7 @@ Matrix<double> gale_vertices(const Matrix<Scalar>& G)
 
    for (int i=0; i<n; ++i)
       if ( (GV(i,0)=sign(G_y[i])) ) {
-         GV[i].slice(1)=convert_to<double>(P*(G[i]/G_y[i] - y));
+         GV[i].slice(range_from(1)) = convert_to<double>(P*(G[i]/G_y[i] - y));
       }
    return GV;
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -38,15 +38,16 @@ UserFunction4perl("# @category Triangulations, subdivisions and volume"
                   "# @param Int k the number of vertices of the first simplex"
                   "# @param Int l the number of vertices of the second simplex"
                   "# @return Vector<Rational>"
-                  "# @example The following creates the staircase triangulation of the product"
+                  "# @example [application fan][prefer cdd]"
+                  "# The following creates the staircase triangulation of the product"
                   "# of the 2- and the 1-simplex."
                   "# > $w = staircase_weight(3,2);"
                   "# > $p = product(simplex(2),simplex(1));"
                   "# > $p->POLYTOPAL_SUBDIVISION(WEIGHTS=>$w);"
                   "# > print $p->POLYTOPAL_SUBDIVISION->MAXIMAL_CELLS;"
                   "# | {0 2 4 5}"
-                  "# | {0 1 3 5}"
-                  "# | {0 2 3 5}",
+                  "# | {0 2 3 5}"
+                  "# | {0 1 3 5}",
                   &staircase_weight,"staircase_weight"); 
 } }
 

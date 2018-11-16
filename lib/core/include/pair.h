@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -65,13 +65,6 @@ struct isomorphic_to_second : std::false_type {};
 
 template <typename Data, typename T1, typename T2>
 struct isomorphic_to_second< Data, pair<T1,T2> > : isomorphic_types<typename deref<T2>::type, Data> {};
-
-}
-namespace polymake {
-
-template <typename T1, typename T2>
-struct is_ordered< std::pair<T1, T2> >
-   : mlist_and<is_ordered<T1>, is_ordered<T2>>::type {};
 
 }
 namespace std {

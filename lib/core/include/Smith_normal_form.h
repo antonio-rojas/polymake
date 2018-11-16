@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -130,7 +130,7 @@ int smith_normal_form_steps(Matrix& M, CompanionLogger& Logger
                             )
 {
    const bool Logger_dummy=is_derived_from<CompanionLogger, dummy_companion_logger>::value;
-   typedef typename Matrix::element_type E;
+   using E = typename Matrix::element_type;
 
    // These are working variables in the following loops,
    // but they shouldn't be created and destroyed all over the time
@@ -141,29 +141,31 @@ int smith_normal_form_steps(Matrix& M, CompanionLogger& Logger
    int r=0, c=0, skipped=0;
    const int R=M.rows();
    while (r<R) {
-      bool can_reduce=true, can_eliminate=false;
-      typename Matrix::row_type::iterator e=M.row(r).begin();
-      if (e.at_end()  ||  M.row(r).size()==1 && M.col(e.index()).size()==1) {
-         ++r; ++skipped; continue;
-      }
-      skipped=0;
-      g=gcd(M.row(r));
-      do {
-         if (abs_equal(g, *e)) {
-            can_reduce=false;
-            if (is_one(g) || g == gcd(M.col(e.index()))) {
-               can_eliminate=true;
-               c=e.index();
-               pivot_elem=*e;
-               break;
-            }
+      bool can_reduce = true, can_eliminate = false;
+      {
+         auto e = M.row(r).begin();
+         if (e.at_end()  ||  M.row(r).size()==1 && M.col(e.index()).size()==1) {
+            ++r; ++skipped; continue;
          }
-         ++e;
-      } while (!e.at_end());
+         skipped=0;
+         g=gcd(M.row(r));
+         do {
+            if (abs_equal(g, *e)) {
+               can_reduce=false;
+               if (is_one(g) || g == gcd(M.col(e.index()))) {
+                  can_eliminate=true;
+                  c=e.index();
+                  pivot_elem=*e;
+                  break;
+               }
+            }
+            ++e;
+         } while (!e.at_end());
+      }
 
       if (can_reduce) {
-         e=M.row(r).begin();
-         pivot_elem=*e;
+         auto e = M.row(r).begin();
+         pivot_elem = *e;
          c=e.index();
          for (++e; !e.at_end(); ++e) {
             ExtGCD<E> x = ext_gcd(pivot_elem, *e);
@@ -195,7 +197,7 @@ int smith_normal_form_steps(Matrix& M, CompanionLogger& Logger
             U.i=r;  U.a_ii=one_value<E>();  U.a_jj=one_value<E>();  U.a_ij=zero_value<E>();
          }
          int next_r=-1;
-         for (typename Matrix::col_type::iterator e=M.col(c).begin(); !e.at_end(); ) {
+         for (auto e=M.col(c).begin(); !e.at_end(); ) {
             if ((U.j=e.index()) == r) { ++e; continue; }
             if (next_r<0) next_r=U.j;
             if (abs_equal(pivot_elem, *e)) {
@@ -218,7 +220,7 @@ int smith_normal_form_steps(Matrix& M, CompanionLogger& Logger
          if (!Logger_dummy) {
             U.i=c; U.a_ji=zero_value<E>();
          }
-         for (typename Matrix::row_type::iterator e=M.row(r).begin(); !e.at_end(); ) {
+         for (auto e=M.row(r).begin(); !e.at_end(); ) {
             if ((U.j=e.index())==c) { ++e; continue; }
             if (!Logger_dummy) {
                U.a_ij=-div_exact(*e,pivot_elem);
@@ -272,7 +274,7 @@ int smith_normal_form(SparseMatrix<E>& M, std::list< std::pair<E,int> >& torsion
    Array<int>::iterator rp=r_perm.begin(), rpe=r_perm.end(),
                         cp=c_perm.begin(), cpe=c_perm.end();
 
-   for (typename Entire< Rows< SparseMatrix<E> > >::iterator r=entire(rows(M)); !r.at_end(); ++r) {
+   for (auto r=entire(rows(M)); !r.at_end(); ++r) {
       if (!r->empty()) {
          ++rank;
          typename SparseMatrix<E>::row_type::iterator e=r->begin();
@@ -319,7 +321,7 @@ int smith_normal_form(SparseMatrix<E>& M, std::list< std::pair<E,int> >& torsion
    }
 
    if (strict_diagonal) {
-      for (auto t=rentire(torsion);  !t.at_end();  ++t)
+      for (auto t=entire<reversed>(torsion);  !t.at_end();  ++t)
          *rp++=M.col(t->second).begin().index(), *cp++=t->second;
 
       if (rp < rpe)
@@ -362,6 +364,8 @@ void compress_torsion(std::list< std::pair<E,int> >& torsion)
    }
 }
 
+//return value is the number of rows cancelled out as they only contain one entry that is +-1
+//hence it has to be added to the rank of the SNF later
 template <typename E, typename CompanionLogger>
 int eliminate_ones(SparseMatrix<E>& M, Bitset& elim_rows, Bitset& elim_cols, const CompanionLogger& Logger)
 {
@@ -388,20 +392,20 @@ int eliminate_ones(SparseMatrix<E>& M, Bitset& elim_rows, Bitset& elim_cols, con
 
       typename SparseMatrix<E>::col_type::iterator e=M.col(c).begin();
       while (!abs_equal(*e,1) && !(++e).at_end()) ;
-      if (e.at_end()) { ++c; continue; }
+      if (e.at_end()) { ++c; continue; } //skip zero col
 
-      int r=e.index();
+      int r=e.index(); //index of first non-zero (i.e. +-1) entry in this col
 
       if (!Logger_dummy) {
          U.i=r; U.a_ii=one_value<E>(); U.a_jj=one_value<E>(); U.a_ij=zero_value<E>();
       }
       for (typename SparseMatrix<E>::col_type::iterator e2=M.col(c).begin(); !e2.at_end(); ) {
-         if ((U.j=e2.index())==r) { ++e2; continue; }
-         if (abs_equal(*e,*e2)) {
+         if ((U.j=e2.index())==r) { ++e2; continue; }//skip row r
+         if (abs_equal(*e,*e2)) {//found more (+-1) entrys below r
             if (sign(*e)==sign(*e2)) {
                if (!Logger_dummy) U.a_ji=-one_value<E>();
                ++e2;
-               M.row(U.j) -= M.row(r);
+               M.row(U.j) -= M.row(r);//subtract rows -> row U.j now has zero entry at col c
             } else {
                if (!Logger_dummy) U.a_ji=one_value<E>();
                ++e2;
@@ -415,8 +419,8 @@ int eliminate_ones(SparseMatrix<E>& M, Bitset& elim_rows, Bitset& elim_cols, con
          Logger.from_left(U);
       }
       if (Logger_dummy) {
-         M.row(r).clear();
-         ++count;
+         M.row(r).clear();// row gets cleared, but in reality there still is an +-1 entry at (r,c)
+         ++count;// which is why we have to count the rank up by one
       } else {
          U.i=c; U.a_ji=zero_value<E>();
          for (typename SparseMatrix<E>::row_type::iterator e2=M.row(r).begin(); !e2.at_end(); ) {

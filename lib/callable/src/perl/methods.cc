@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -21,99 +21,125 @@ namespace pm { namespace perl {
 
 namespace {
 
-glue::cached_cv application_cv={ "Polymake::User::application", 0 },
-            app_from_object_cv={ "Polymake::Main::application_from_object", 0 },
-                  new_scope_cv={ "Polymake::Main::createNewScope", 0 },
-                 set_custom_cv={ "Polymake::Main::set_custom", 0 },
-               reset_custom_cv={ "Polymake::Main::reset_custom", 0 },
-               local_custom_cv={ "Polymake::Main::local_custom", 0 },
-                   greeting_cv={ "Polymake::Main::greeting", 0 };
+glue::cached_cv application_cv{ "Polymake::User::application" },
+            app_from_object_cv{ "Polymake::Main::application_from_object" },
+                  new_scope_cv{ "Polymake::Main::createNewScope" },
+                 set_custom_cv{ "Polymake::Main::set_custom" },
+               reset_custom_cv{ "Polymake::Main::reset_custom" },
+               local_custom_cv{ "Polymake::Main::local_custom" },
+                   greeting_cv{ "Polymake::Main::greeting" },
+               shell_enable_cv{ "Polymake::Main::shell_enable" },
+              shell_execute_cv{ "Polymake::Main::shell_execute" },
+             shell_complete_cv{ "Polymake::Main::shell_complete" },
+         shell_context_help_cv{ "Polymake::Main::shell_context_help" };
 
 const char Extension[]="Polymake::Core::Extension";
+
 }
 
-void Main::set_application(const char* name, size_t nl)
+void Main::set_application(const AnyString& appname)
 {
-   dTHX;
+   dTHXa(pi);
    PmStartFuncall(1);
-   mPUSHp(name, nl);
+   mPUSHp(appname.ptr, appname.len);
    PUTBACK;
    glue::call_func_void(aTHX_ application_cv);
 }
 
 void Main::set_application_of(const Object& x)
 {
-   dTHX;
+   dTHXa(pi);
    PmStartFuncall(1);
    PUSHs(x.obj_ref);
    PUTBACK;
    glue::call_func_void(aTHX_ app_from_object_cv);
 }
 
-void Main::add_extension(const char* path, size_t pl)
+void Main::add_extension(const AnyString& path)
 {
-   dTHX;
+   dTHXa(pi);
    PmStartFuncall(2);
    mPUSHp(Extension, sizeof(Extension)-1);
-   mPUSHp(path, pl);
+   mPUSHp(path.ptr, path.len);
    PUTBACK;
    glue::call_method_void(aTHX_ "add");
 }
 
-SV* Main::lookup_extension(const char* path, size_t pl)
+void Main::include(const AnyString& path)
 {
-   dTHX;
+   call_app_method("include_rules", path); 
+}
+
+void Main::set_preference(const AnyString& label_exp)
+{ 
+   call_app_method("set_preference", label_exp); 
+}
+
+void Main::reset_preference(const AnyString& label_exp)
+{ 
+   call_app_method("reset_preference", label_exp); 
+}
+
+SV* Main::lookup_extension(const AnyString& path)
+{
+   dTHXa(pi);
    PmStartFuncall(2);
    mPUSHp(Extension, sizeof(Extension)-1);
-   mPUSHp(path, pl);
+   mPUSHp(path.ptr, path.len);
    PUTBACK;
    return glue::call_method_scalar(aTHX_ "lookup");
 }
 
-void Main::call_app_method(const char* method, const char *arg, size_t argl)
+void Main::call_app_method(const char* method, const AnyString& arg)
 {
-   dTHX;
+   dTHXa(pi);
    PmStartFuncall(2);
-   SP=glue::push_current_application(aTHX_ SP);
-   mPUSHp(arg, argl);
+   SV* const app=glue::get_current_application(aTHX);
+   PUSHs(app);
+   mPUSHp(arg.ptr, arg.len);
    PUTBACK;
    glue::call_method_void(aTHX_ method);
 }
 
-void Main::_set_custom(const char* name, size_t ll, const char* key, size_t kl, Value& x)
+void Main::set_custom_var(const AnyString& name, const AnyString& key, Value& x)
 {
-   dTHX;
+   dTHXa(pi);
    PmStartFuncall(3);
-   mPUSHp(name, ll);
-   if (key) mPUSHp(key, kl);
+   mPUSHp(name.ptr, name.len);
+   if (key.ptr) mPUSHp(key.ptr, key.len);
    PUSHs(x.get_temp());
    PUTBACK;
    glue::call_func_void(aTHX_ set_custom_cv);
 }
 
-void Main::_reset_custom(const char* name, size_t ll, const char* key, size_t kl)
+void Main::reset_custom(const AnyString& name, const AnyString& key)
 {
-   dTHX;
+   dTHXa(pi);
    PmStartFuncall(2);
-   mPUSHp(name, ll);
-   if (key) mPUSHp(key, kl);
+   mPUSHp(name.ptr, name.len);
+   if (key.ptr) mPUSHp(key.ptr, key.len);
    PUTBACK;
    glue::call_func_void(aTHX_ reset_custom_cv);
 }
 
 Scope Main::newScope()
 {
-   dTHX;
+   dTHXa(pi);
    PmStartFuncall(0);
-   return call_func_scalar(aTHX_ new_scope_cv);
+   return Scope(this, call_func_scalar(aTHX_ new_scope_cv));
 }
 
-void Scope::_set_custom(const char* name, size_t ll, const char* key, size_t kl, Value& x)
+void Scope::prefer_now(const AnyString& labels) const
 {
-   dTHX;
+   pm_main->call_app_method("prefer_now", labels);
+}
+
+void Scope::set_custom_var(const AnyString& name, const AnyString& key, Value& x) const
+{
+   dTHXa(pm_main->pi);
    PmStartFuncall(3);
-   mPUSHp(name, ll);
-   if (key) mPUSHp(key, kl);
+   mPUSHp(name.ptr, name.len);
+   if (key.ptr) mPUSHp(key.ptr, key.len);
    PUSHs(x.get_temp());
    PUTBACK;
    glue::call_func_void(aTHX_ local_custom_cv);
@@ -121,14 +147,88 @@ void Scope::_set_custom(const char* name, size_t ll, const char* key, size_t kl,
 
 std::string Main::greeting(int verbose)
 {
-   dTHX;
+   dTHXa(pi);
    PmStartFuncall(1);
    mPUSHi(verbose);
    PUTBACK;
-   size_t l=0;
-   SV* greeting_sv = glue::call_func_scalar(aTHX_ greeting_cv);
-   const char* greeting=SvPV(greeting_sv, l);
-   return std::string(greeting, l);
+   return glue::call_func_string(aTHX_ greeting_cv);
+}
+
+void Main::shell_enable()
+{
+   dTHXa(pi);
+   PmStartFuncall(0);
+   glue::call_func_void(aTHX_ shell_enable_cv);
+}
+
+Main::shell_execute_t Main::shell_execute(const std::string& input)
+{
+   if (input.empty())
+      return shell_execute_t(true, input, input, input);
+
+   dTHXa(pi);
+   PmStartFuncall(1);
+   mPUSHp(input.c_str(), input.size());
+   PUTBACK;
+   if (glue::call_func_list(aTHX_ shell_execute_cv) != 4)
+      return shell_execute_t(false, "", "", "unknown error");
+
+   SPAGAIN;
+   bool executed=false;
+   std::string out, err, exc;
+   Value(POPs) >> exc;
+   Value(POPs) >> err;
+   Value(POPs) >> out;
+   Value(POPs) >> executed;
+   PmFinishFuncall;
+   return shell_execute_t(executed, std::move(out), std::move(err), std::move(exc));
+}
+
+Main::shell_complete_t Main::shell_complete(const std::string& input)
+{
+   dTHXa(pi);
+   PmStartFuncall(1);
+   mPUSHp(input.c_str(), input.size());
+   PUTBACK;
+   int n=glue::call_func_list(aTHX_ shell_complete_cv);
+   int offset=0;
+   char append=0;
+   std::vector<std::string> proposals(n>2 ? n-2 : 0);
+   if (n >= 2) {
+      dSP;
+      while (--n >= 2) {
+         Value(POPs) >> proposals[n-2];
+      }
+      Value(POPs) >> append;
+      Value(POPs) >> offset;
+      PmFinishFuncall;
+   }
+   return shell_complete_t(offset, append, std::move(proposals));
+}
+
+std::vector<std::string> Main::shell_context_help(const std::string& input, size_t pos, bool full, bool html)
+{
+   dTHXa(pi);
+   PmStartFuncall(4);
+   mPUSHp(input.c_str(), input.size());
+   if (pos == std::string::npos)
+      pos=input.size();
+   mPUSHi(pos);
+   SV* bool_sv=full ? &PL_sv_yes : &PL_sv_no;
+   PUSHs(bool_sv);
+   bool_sv=html ? &PL_sv_yes : &PL_sv_no;
+   PUSHs(bool_sv);
+   PUTBACK;
+   int n=glue::call_func_list(aTHX_ shell_context_help_cv);
+   std::vector<std::string> results(n);
+   if (n) {
+      dSP;
+      while (--n >= 0) {
+         Value(POPs) >> results[n];
+      }
+      PmFinishFuncall;
+   }
+   return results;
 }
 
 } }

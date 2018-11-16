@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -28,7 +28,7 @@ custom $neato;
 CONFIGURE {
    find_program($dot, "dot", { prompt => "the `dot' program from the graphviz package" })
       and
-   ($neato=$dot) =~ s/\bdot$/neato/;
+   $neato= $dot =~ s/\bdot$/neato/r;
 }
 
 use Graphviz;
@@ -89,6 +89,13 @@ package application;
 #  You can also use any expression allowed for the ''open'' function,
 #  including "-" for terminal output, "&HANDLE" for an already opened file handle,
 #  or "| program" for a pipe.
+#
+# @example [notest] The following creates a star graph with 4 nodes and visualizes it via graphviz with default options:
+# > $g = new Graph<Undirected>(ADJACENCY=>[[],[0],[0],[0]]);
+# > graphviz($g->VISUAL);
+# The following shows some modified visualization style of the same graph:
+# > $g = new Graph<Undirected>(ADJACENCY=>[[],[0],[0],[0]]);
+# > graphviz($g->VISUAL(NodeColor=>"green",EdgeColor=>"purple",EdgeThickness=>5));
 
 user_function graphviz(Visual::Object+, { File => undef }) {
    visualize_explicit(@_, "Graphviz");

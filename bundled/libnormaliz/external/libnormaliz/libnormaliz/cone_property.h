@@ -35,50 +35,148 @@ namespace libnormaliz {
  */
 namespace ConeProperty {
     enum Enum {
-        // goals that can be computed
-        Generators,
+        FIRST_MATRIX,
+        Generators = Enum::FIRST_MATRIX,
         ExtremeRays,
         VerticesOfPolyhedron,
         SupportHyperplanes,
-        TriangulationSize,
-        TriangulationDetSum,
-        Triangulation,
-        Multiplicity,
-        RecessionRank,
-        AffineDim,
-        ModuleRank,
         HilbertBasis,
         ModuleGenerators,
         Deg1Elements,
-        HilbertSeries,
-        Grading,
-        IsPointed,
+        ModuleGeneratorsOverOriginalMonoid,
+        ExcludedFaces,
+        OriginalMonoidGenerators,
+        MaximalSubspace,
+        Equations,
+        Congruences,
+        LAST_MATRIX = Enum::Congruences,
+        FIRST_MATRIX_FLOAT,
+        SuppHypsFloat = Enum::FIRST_MATRIX_FLOAT,
+        VerticesFloat,
+        LAST_MATRIX_FLOAT = Enum::VerticesFloat,
+        // Vector values
+        FIRST_VECTOR,
+        Grading = Enum::FIRST_VECTOR,
+        Dehomogenization,
+        WitnessNotIntegrallyClosed,
+        GeneratorOfInterior,
+        ClassGroup,
+        LAST_VECTOR = Enum::ClassGroup,
+        // Integer valued,
+        FIRST_INTEGER,
+        TriangulationDetSum = Enum::FIRST_INTEGER,
+        ReesPrimaryMultiplicity,
+        GradingDenom,
+        UnitGroupIndex,
+        InternalIndex,
+        LAST_INTEGER = Enum::InternalIndex,
+        FIRST_GMP_INTEGER,
+        ExternalIndex = FIRST_GMP_INTEGER,
+        LAST_GMP_INTEGER = Enum::ExternalIndex,
+        // rational valued
+        FIRST_RATIONAL,
+        Multiplicity = Enum::FIRST_RATIONAL,
+        Volume,
+        Integral,
+        VirtualMultiplicity,
+        LAST_RATIONAL = Enum::VirtualMultiplicity,
+        // floating point valued
+        FIRST_FLOAT,
+        EuclideanVolume = Enum::FIRST_FLOAT,
+        LAST_FLOAT = Enum::EuclideanVolume,
+        // dimensions
+        FIRST_MACHINE_INTEGER,
+        TriangulationSize = Enum::FIRST_MACHINE_INTEGER,
+        RecessionRank,
+        AffineDim,
+        ModuleRank,
+        Rank,
+        EmbeddingDim,
+        LAST_MACHINE_INTEGER = Enum::EmbeddingDim,
+        // boolean valued 
+        FIRST_BOOLEAN,
+        IsPointed = Enum::FIRST_BOOLEAN,
         IsDeg1ExtremeRays,
         IsDeg1HilbertBasis,
         IsIntegrallyClosed,
-        WitnessNotIntegrallyClosed,
-        OriginalMonoidGenerators,
         IsReesPrimary,
-        ReesPrimaryMultiplicity,
+        IsInhomogeneous,
+        IsGorenstein,
+        LAST_BOOLEAN = Enum::IsGorenstein,
+        // complex structures
+        FIRST_COMPLEX_STRUCTURE,
+        Triangulation = Enum::FIRST_COMPLEX_STRUCTURE,
         StanleyDec,
-        ExcludedFaces,
-        Dehomogenization,
         InclusionExclusionData,
+        IntegerHull,
+        ProjectCone,
+        ConeDecomposition,
+        HilbertSeries,
+        HilbertQuasiPolynomial,
+        EhrhartSeries,
+        WeightedEhrhartSeries,
+        WeightedEhrhartQuasiPolynomial,
         Sublattice,
-        ClassGroup,
-        ModuleGeneratorsOverOriginalMonoid,
-        // compute options
+        LAST_COMPLEX_STRUCTURE = Enum::Sublattice,
+        //
+        // integer type for computations
+        //
+        FIRST_PROPERTY,
+        BigInt = Enum::FIRST_PROPERTY,
+        //
+        // algorithmic variants
+        //
+        DefaultMode,
         Approximate,
         BottomDecomposition,
-        DefaultMode,
+        NoBottomDec,       
         DualMode,
+        PrimalMode,
+        Projection,
+        ProjectionFloat,
+        NoProjection,
+        Symmetrize,
+        NoSymmetrization,
+        NoSubdivision,
+        NoNestedTri, // synonym for NoSubdivision
         KeepOrder,
-        IntegerHull,
-        MaximalSubspace,
-        ConeDecomposition,
         HSOP,
-        EnumSize // this has to be the last entry, to get the number of entries in the enum
+        NoPeriodBound,
+        SCIP,
+        NoLLL,
+        NoRelax,
+        Descent,
+        NoDescent,
+        //
+        // checking properties of already computed data
+        // (cannot be used as a computation goal)
+        //
+        IsTriangulationNested,
+        IsTriangulationPartial,
+        //
+        // ONLY FOR INTERNAL CONTROL
+        //
+        ExplicitHilbertSeries,
+        NakedDual,
+        EnumSize,
+        LAST_PROPERTY = Enum::EnumSize // this has to be the last entry, to get the number of entries in the enum
     }; // remember to change also the string conversion function if you change this enum
+}
+
+namespace OutputType{
+    enum Enum {
+        Matrix,
+        MatrixFloat,
+        Vector,
+        Integer,
+        GMPInteger,
+        Rational,
+        Float,
+        MachineInteger,
+        Bool,
+        Complex,
+        Void
+    };
 }
 
 class ConeProperties {
@@ -113,9 +211,10 @@ public:
     ConeProperties options();
 
     /* the following methods are used internally */
-    void set_preconditions();    // activate properties which are needed implicitly
+    void set_preconditions(bool inhomogeneous);    // activate properties which are needed implicitly
     void prepare_compute_options(bool inhomogeneous);
     void check_sanity(bool inhomogeneous);
+    void check_conflicting_variants();
 
     /* print it in a nice way */
     friend std::ostream& operator<<(std::ostream&, const ConeProperties&);
@@ -131,6 +230,7 @@ bool isConeProperty(ConeProperty::Enum& cp, const std::string& s);
 ConeProperty::Enum toConeProperty(const std::string&);
 const std::string& toString(ConeProperty::Enum);
 std::ostream& operator<<(std::ostream&, const ConeProperties&);
+OutputType::Enum output_type(ConeProperty::Enum);
 
 }
 

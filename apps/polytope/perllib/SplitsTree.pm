@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -50,7 +50,7 @@ BEGIN distances;
     MATRIX
 .
     for (my $n=0; $n < $ntax; ++$n) {
-       $text .= "    ".$self->taxa->($n)."  ".Visual::print_coords($self->metric->[$n]->slice(0,$n+1))."\n";
+       $text .= "    ".$self->taxa->($n)."  ".Visual::print_coords($self->metric->[$n]->slice(sequence(0,$n+1)))."\n";
     }
     $text .= << ".";
     ;

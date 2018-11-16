@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -62,7 +62,7 @@ UserFunctionTemplate4perl("# @category Producing a polytope from polytopes"
                           "# and all must be defined over the same number type. "
                           "# Each vertex //v// of the //i//-th polytope is embedded to //v//|//t_i e_i//, "
                           "# where //t_i// is the //i//-th entry of the optional array //t//. "
-                          "# @param Polytope A the input polytopes"
+                          "# @param Array<Polytope> A the input polytopes"
                           "# @option Array<Scalar> factors array of scaling factors for the Cayley embedding; defaults to the all-1 vector"
                   "# @option Bool no_labels Do not copy [[VERTEX_LABELS]] from the original polytope. default: 0"
                           "# @return Polytope",

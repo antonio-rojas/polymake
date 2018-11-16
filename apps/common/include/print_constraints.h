@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -57,7 +57,7 @@ void print_constraints_sub(const Matrix<Scalar>& M, Array<std::string> coord_lab
       else
          cout << i;
       cout << ": ";
-      if (is_zero(M.row(i).slice(start))) {
+      if (is_zero(M.row(i).slice(range_from(start)))) {
          cout << "0";
       } else {
          bool first=true;

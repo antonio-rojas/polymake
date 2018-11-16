@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -102,15 +102,15 @@ rule MATROID_HYPERPLANES : HyperplanePerm.MATROID_HYPERPLANES, HyperplanePerm.PE
 weight 1.10;
 
 # @category Axiom systems
-# The lattice of flats, this is a graph with all closed sets as nodes
-property LATTICE_OF_FLATS : FaceLattice;
+# The lattice of flats.
+# This is a graph with all closed sets as nodes and inclusion relations as edges.
+property LATTICE_OF_FLATS : Lattice<BasicDecoration, Sequential>;
 
 # @category Axiom systems
-# The lattice of cyclic flats of the matroid. 
+# The lattice of cyclic flats of the matroid.
 # A flat is a cyclic flat, if and only if it is a union of circuits.
 # Their ranks can also be read off of this property using nodes_of_dim(..)
-property LATTICE_OF_CYCLIC_FLATS : FaceLattice;
-
+property LATTICE_OF_CYCLIC_FLATS : Lattice<BasicDecoration, Sequential>;
 
 ## ADVANCED PROPERTIES ###
 
@@ -123,8 +123,8 @@ property LOOPS : Set;
 property POLYTOPE : polytope::Polytope;
 
 # @category Advanced properties
-# If the matroid is transversal, 
-# this is the unique maximal presentation. I.e. the set system consists of [[RANK]] many sets and none of the 
+# If the matroid is transversal,
+# this is the unique maximal presentation. I.e. the set system consists of [[RANK]] many sets and none of the
 # sets can be increased without changing the matroid.
 property MAXIMAL_TRANSVERSAL_PRESENTATION : IncidenceMatrix;
 
@@ -167,7 +167,7 @@ property BINARY_VECTORS : Matrix<Int>;
 
 # @category Advanced properties
 # Whether the matroid is representable over GF(3)
-# NOTE: the property may be 'undef' if the current implementation cannot decide. 
+# NOTE: the property may be 'undef' if the current implementation cannot decide.
 property TERNARY : Bool;
 
 # @category Advanced properties
@@ -177,7 +177,7 @@ property TERNARY_VECTORS : Matrix<Int>;
 
 # @category Advanced properties
 # Whether the matroid is representable over every field, that is the repesentation is unimodular.
-# NOTE: the property is 'undef' when its hard to decide, whether the matroid is ternary. 
+# NOTE: the property is 'undef' when it's hard to decide whether the matroid is ternary.
 property REGULAR : Bool;
 
 # @category Advanced properties
@@ -197,8 +197,8 @@ property TUTTE_POLYNOMIAL : common::Polynomial;
 property G_INVARIANT : Map< Set<Int>, Integer>;
 
 # @category Advanced properties
-# This is an equivalent characterization of the [[G_INVARIANT]] given by Bonin and Kung ([Bonin, Kung: The G-invariant and catenary data of a matroid (2015)]). 
-# It lives in the free abelian group over all (n,r)-compositions (where n = [[N_ELEMENTS]] and r = [[RANK]]). 
+# This is an equivalent characterization of the [[G_INVARIANT]] given by Bonin and Kung ([Bonin, Kung: The G-invariant and catenary data of a matroid (2015)]).
+# It lives in the free abelian group over all (n,r)-compositions (where n = [[N_ELEMENTS]] and r = [[RANK]]).
 # Those are sequences (a0,...,ar) with a0 >= 0, a_j > 0 for j > 0 and sum a_i = n
 # For each maximal chain of flats F0,...,Fr = E of M, the corresponding composition is a0 = |F0| and a_i = |Fi \ Fi-1| for i > 0.
 # For a composition a, let v(M,a) be the number of maximal chains of flats with composition a. Then
@@ -214,7 +214,7 @@ property BETA_INVARIANT : Integer;
 property CONNECTED : Bool;
 
 # @category Advanced properties
-# The connected componets
+# The connected components
 property CONNECTED_COMPONENTS : Array<Set> {
    sub equal {
       defined(eval { find_permutation(@_) })
@@ -230,7 +230,7 @@ property N_CONNECTED_COMPONENTS : Int;
 property SERIES_PARALLEL : Bool;
 
 # @category Advanced properties
-# Whether the matroid is simple. 
+# Whether the matroid is simple.
 property SIMPLE : Bool;
 
 # @category Advanced properties
@@ -238,7 +238,7 @@ property SIMPLE : Bool;
 property SPARSE_PAVING : Bool;
 
 # @category Advanced properties
-# Whether the matroid is laminar. This is the case if and only if for any two circuits C1,C2 with 
+# Whether the matroid is laminar. This is the case if and only if for any two circuits C1,C2 with
 # non-empty intersection, their closures are comparable (i.e. one contains the other)
 # see also [Fife, Oxley: Laminar matroids. arXiv: 1606.08354]
 property LAMINAR : Bool;
@@ -246,7 +246,7 @@ property LAMINAR : Bool;
 # @category Advanced properties
 # The flats that correspond to split facets of the matroid [[POLYTOPE]].
 # The facets are either hypersimplex facets or splits
-property SPLIT_FLACETS : Array< Array<Set> >;
+property SPLIT_FLACETS : Array<Array<Set>>;
 
 # @category Advanced properties
 # Whether all SPLIT_FLACETS in the matroid are compatible.
@@ -274,12 +274,13 @@ property AUTOMORPHISM_GROUP : group::Group;
 # @category Other
 # Unique names assigned to the elements of the matroid.
 #
-# For a matroid build from scratch, you should create this property by yourself.
+# For a matroid built from scratch, you should create this property by yourself.
+# the labels may be assigned for you in a meaningful way.
 # If you build the matroid with a construction client, (e.g. [[matroid_from_graph]])
-# the labels may be assigend for you in a meaningful way.
+# the labels may be assigned for you in a meaningful way.
 property LABELS : Array<String> : mutable;
 
-# @category Input properties 
+# @category Input properties
 # If the matroid is realizable over the rationals, this property contains
 # coordinates for some realization. Specifying coordinates is one way
 # to define a matroid.
@@ -289,7 +290,7 @@ property VECTORS : Matrix;
 # A transversal matroid can be defined via a multiset of subsets of the ground set (0,...,n-1)
 # (i.e. [[N_ELEMENTS]] needs to be specified).
 # Its bases are the maximal matchings of the bipartite incidence graph.
-property TRANSVERSAL_PRESENTATION : Array<Set<Int> >;
+property TRANSVERSAL_PRESENTATION : Array<Set<Int>>;
 
 }
 

@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -122,7 +122,8 @@ object Polytope<Rational> {
     weight 0.10;
     
 
-    rule MINKOWSKI_CONE : HASSE_DIAGRAM, GRAPH.ADJACENCY, GRAPH.EDGE_DIRECTIONS, FAR_FACE {
+    rule MINKOWSKI_CONE : HASSE_DIAGRAM.ADJACENCY, HASSE_DIAGRAM.DECORATION, HASSE_DIAGRAM.INVERSE_RANK_MAP, HASSE_DIAGRAM.TOP_NODE, HASSE_DIAGRAM.BOTTOM_NODE, \
+         GRAPH.ADJACENCY, GRAPH.EDGE_DIRECTIONS, FAR_FACE {
         $this->MINKOWSKI_CONE = minkowski_cone($this->HASSE_DIAGRAM, $this->GRAPH->ADJACENCY, $this->GRAPH->EDGE_DIRECTIONS, $this->FAR_FACE);
     }
     precondition : CONE_DIM { $this->CONE_DIM > 2; }
@@ -142,9 +143,8 @@ object Polytope<Rational> {
     # @param Vector<Rational> coeff coefficient vector to the rays of the Minkowski summand cone
     # @return Polytope<Rational>
     user_method MINKOWSKI_CONE_COEFF {
-        
         my ($p, $coeff)  = @_;
-        return minkowski_cone_coeff($coeff, $p->MINKOWSKI_CONE, $p->GRAPH, $p->FAR_FACE, new Matrix(grep($_->[0]==0, @{$p->VERTICES})));
+        return minkowski_cone_coeff($coeff, $p->MINKOWSKI_CONE, $p->GRAPH, $p->FAR_FACE, $p->VERTICES->minor($p->FAR_FACE, All));
     }
     
     # @category Geometry
@@ -163,7 +163,7 @@ object Polytope<Rational> {
         #     if ( $_ != 0 ) {  die "given point is not in Minkowski cone"; }
         # } 
         my $vertices = $p->give("VERTICES");
-        return  minkowski_cone_point($point, new Matrix(grep($_->[0]==0, @$vertices)), $p->GRAPH, $p->FAR_FACE);
+        return minkowski_cone_point($point, $vertices->minor($p->FAR_FACE, All), $p->GRAPH, $p->FAR_FACE);
     }
 
     rule MONOID_GRADING : CONE_AMBIENT_DIM {
@@ -206,20 +206,16 @@ object_specialization Polytope::Lattice {
     user_method POLYTOPE_IN_STD_BASIS {
         my $this=shift;
         my $p=new Polytope<Rational>;
-        if ( defined (my $v=$this->VERTICES) ) {
-            $p->VERTICES=(ones_vector<Rational>($v->rows))|($v->minor(All,~[0])*$this->LATTICE_BASIS);
-        } elsif(defined ($v=$this->POINTS)) {
-            $p->POINTS=(ones_vector<Rational>($v->rows))|($v->minor(All,~[0])*$this->LATTICE_BASIS);
+        if (my ($v, $prop_name)=$this->lookup_with_name("VERTICES | POINTS")) {
+            $p->take($prop_name, ones_vector<Rational>($v->rows) | $v->minor(All,~[0])*$this->LATTICE_BASIS);
         }
 
-        if ( defined (my $f=$this->FACETS) ) {
-            $p->FACETS=$f->col(0)|($f->minor(All,~[0])*inv($this->LATTICE_BASIS));
-        } elsif( defined ($f=$this->INEQUALITIES) ) {
-            $p->INEQUALITIES=$f->col(0)|($f->minor(All,~[0])*inv($this->LATTICE_BASIS));
+        if (my ($f, $prop_name)=$this->lookup_with_name("FACETS | INEQUALITIES")) {
+            $p->take($prop_name, $f->col(0) | $f->minor(All,~[0])*inv($this->LATTICE_BASIS));
         }
 
-        if ( defined (my $f=$this->VERTICES_IN_FACETS) ) {
-            $p->VERTICES_IN_FACETS=$this->VERTICES_IN_FACETS;
+        if (defined (my $f=$this->lookup("VERTICES_IN_FACETS"))) {
+            $p->VERTICES_IN_FACETS=$f;
         }
 
         return $p;
@@ -246,6 +242,7 @@ object_specialization Polytope::Lattice {
     # @category Lattice points in cones
     # The number of [[LATTICE_POINTS]] in the //n//-th dilation of the polytope
     # @param Int n dilation factor
+        # @return Int
     user_method N_LATTICE_POINTS_IN_DILATION {
         my ($this, $n)=@_;
         my $ev = $this->EHRHART_POLYNOMIAL_COEFF;
@@ -281,12 +278,12 @@ object_specialization Polytope::Lattice {
         $this->N_INTERIOR_LATTICE_POINTS = $this->H_STAR_VECTOR->[-1];
     }
     weight 0.1;
-	
-	rule N_INTERIOR_LATTICE_POINTS : { 
-		$this->N_INTERIOR_LATTICE_POINTS = 1; 
-	}
-	precondition : REFLEXIVE;
-	weight 0.10;
+        
+        rule N_INTERIOR_LATTICE_POINTS : { 
+                $this->N_INTERIOR_LATTICE_POINTS = 1; 
+        }
+        precondition : REFLEXIVE;
+        weight 0.10;
 
     # Check, whether the polar dual is also a lattice polytope.
     rule REFLEXIVE : FACETS {
@@ -365,7 +362,7 @@ object_specialization Polytope::Lattice {
     
     #Read FACETS f1, . . . , fk (in lattice minimal form) and check whether there is a lattice minimal x ??? L such that hx, fii = 1 for all 1 . i . k. If so, then P is Gorenstein, and the first coordinate r of x of is the Gorenstein index of P. x is the unique inner lattice point of rP
     rule GORENSTEIN , GORENSTEIN_INDEX , GORENSTEIN_VECTOR : FACETS , CONE_AMBIENT_DIM {
-        my $p = new Polytope<Rational>(POINTS => ((ones_vector<Integer>()) | primitive($this->FACETS)));
+        my $p = new Polytope<Rational>(POINTS => ones_vector<Integer>() | primitive($this->FACETS));
         if ($p->CONE_DIM <= $this->CONE_AMBIENT_DIM) {
             my $x = dehomogenize($p->AFFINE_HULL->row(0));
             if (is_integral($x)) {
@@ -461,12 +458,12 @@ object_specialization Polytope::Lattice {
     weight 0.1;
 
     rule EHRHART_POLYNOMIAL_COEFF : H_STAR_VECTOR , CONE_DIM {
-        $this->EHRHART_POLYNOMIAL_COEFF = binomial_to_power_basis($this->H_STAR_VECTOR->slice(0,$this->CONE_DIM));
+        $this->EHRHART_POLYNOMIAL_COEFF = binomial_to_power_basis($this->H_STAR_VECTOR->slice(sequence(0, $this->CONE_DIM)));
     }
     weight 0.10;
 
     rule H_STAR_VECTOR : EHRHART_POLYNOMIAL_COEFF , CONE_DIM {
-        $this->H_STAR_VECTOR = power_to_binomial_basis($this->EHRHART_POLYNOMIAL_COEFF->slice(0,$this->CONE_DIM));
+        $this->H_STAR_VECTOR = power_to_binomial_basis($this->EHRHART_POLYNOMIAL_COEFF->slice(sequence(0, $this->CONE_DIM)));
     }
     weight 0.10;
     
@@ -558,20 +555,20 @@ object_specialization Polytope::Lattice {
 
         my $ip=repeat_row($this->INTERIOR_LATTICE_POINTS->[0],$this->CONE_DIM-1);
 
-	foreach my $v (@{$this->VERTICES_IN_FACETS}) {
-	
-	  my $m=primitive(($this->VERTICES->minor($v,All)-$ip));
-
-	  my $g = 0;
-	  foreach (all_subsets_of_k($this->CONE_DIM-1,1..$this->CONE_AMBIENT_DIM-1)) {
-	    $g = gcd($g,abs(det( $m->minor(All,$_) )));
-	    last if ($g == 1);
-	  }
+        foreach my $v (@{$this->VERTICES_IN_FACETS}) {
         
-	  if ($g != 1) { $this->POLAR_SMOOTH = 0; return; }
-	}
+          my $m=primitive(($this->VERTICES->minor($v,All)-$ip));
 
-	$this->POLAR_SMOOTH=1;
+          my $g = 0;
+          foreach (all_subsets_of_k($this->CONE_DIM-1,1..$this->CONE_AMBIENT_DIM-1)) {
+            $g = gcd($g,abs(det( $m->minor(All,$_) )));
+            last if ($g == 1);
+          }
+        
+          if ($g != 1) { $this->POLAR_SMOOTH = 0; return; }
+        }
+
+        $this->POLAR_SMOOTH=1;
     }
     precondition : REFLEXIVE;
     weight 3.10;
@@ -590,7 +587,7 @@ object_specialization Polytope::Lattice {
             $sched->apply($p);
             foreach my $h (@{$p->HILBERT_BASIS_GENERATORS->[0]}) {
                 next if ($h->[0]==1);
-                foreach (@{$this->FACETS|INEQUALITIES}) {
+                foreach (@{$this->give("FACETS | INEQUALITIES")}) {
                     if ($_*($h+$this->VERTICES->[$v]) < 0) {
                         $this->VERY_AMPLE=0;
                         return;
@@ -656,27 +653,31 @@ object_specialization Polytope::Lattice {
        my $S=new Polytope(INEQUALITIES=>(scale(polarize(minkowski_sum(1,$this, -1,$this)),$width)->FACETS)/$half_space);
        my $B=$S->LATTICE_POINTS;      
 
-       for(my $i=0; $i<$B->rows(); ++$i){
-	   my $current_direction = (new Integer(0))|primitive($B->row($i)->slice(1));
-	   next if($current_direction == zero_vector($current_direction->dim)); #because 0 is a stupid direction
-	   
-	   $lp=$this->LP(LINEAR_OBJECTIVE=>$current_direction, temporary);
+       for (my $i=0; $i<$B->rows(); ++$i) {
+           my $current_direction = 0 | primitive($B->row($i)->slice(range_from(1)));
+           next if is_zero($current_direction); #because 0 is a stupid direction
+           
+           $lp=$this->LP(LINEAR_OBJECTIVE=>$current_direction, temporary);
 
-	   $sched->apply($lp);
+           $sched->apply($lp);
 
-	   my $current_width=$lp->MAXIMAL_VALUE-$lp->MINIMAL_VALUE;
+           my $current_width=$lp->MAXIMAL_VALUE-$lp->MINIMAL_VALUE;
 
-	   if ($current_width<$width){
-	       $width=$current_width; 
-	       $direction=$current_direction;
-	   }
+           if ($current_width<$width){
+               $width=$current_width; 
+               $direction=$current_direction;
+           }
        }
        $this->LATTICE_WIDTH=$width;
-       $this->LATTICE_WIDTH_DIRECTION=$direction;	
+       $this->LATTICE_WIDTH_DIRECTION=$direction;       
     }
     precondition : FULL_DIM;
     weight 5.50;
 
+    rule FOLDABLE_COCIRCUIT_EQUATIONS : COMBINATORIAL_DIM, RAYS, RAYS_IN_FACETS, INTERIOR_RIDGE_SIMPLICES, MAX_INTERIOR_SIMPLICES {
+       $this->FOLDABLE_COCIRCUIT_EQUATIONS = foldable_cocircuit_equations($this->COMBINATORIAL_DIM, $this->RAYS, $this->RAYS_IN_FACETS, $this->INTERIOR_RIDGE_SIMPLICES, $this->MAX_INTERIOR_SIMPLICES);
+    }
+ 
 }
 
 

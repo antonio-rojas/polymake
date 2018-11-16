@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -18,6 +18,7 @@
 #include "polymake/Array.h"
 #include "polymake/PowerSet.h"
 #include "polymake/IncidenceMatrix.h"
+#include "polymake/topaz/boundary_tools.h"
 
 namespace polymake { namespace polytope {
 
@@ -29,17 +30,16 @@ perl::ListReturn triang_boundary(const Array< Set<int> >& triang, const Incidenc
   Array<Set<int> > facet_triag(VIF.rows());
   // simplicial facets need not be triangulated
   int n_simplices=0;
-  for (Entire< Rows< IncidenceMatrix<> > >::iterator f=entire(rows(VIF)); !f.at_end(); ++f)
+  for (auto f=entire(rows(VIF)); !f.at_end(); ++f)
     if (f->size() == dim) {
       triang_boundary.push_back(*f);
       facet_triag[f->index()].push_back(n_simplices++);
       f->clear();
     }
      
-  for (Entire< Array< Set<int> > >::const_iterator t=entire(triang); !t.at_end(); ++t) {
-    typedef Subsets_less_1<const Set<int>&> faces;
-    for (Entire<faces>::const_iterator face=entire(all_subsets_less_1(*t)); !face.at_end(); ++face) {
-      faces::value_type::const_iterator v=entire(*face);
+  for (auto t=entire(triang); !t.at_end(); ++t) {
+    for (auto face=entire(all_subsets_less_1(*t)); !face.at_end(); ++face) {
+      auto v=entire(*face);
       Set<int> common_facets=VIF.col(*v);
       for (++v; !v.at_end() && !common_facets.empty(); ++v)
         common_facets *= VIF.col(*v);
@@ -50,8 +50,9 @@ perl::ListReturn triang_boundary(const Array< Set<int> >& triang, const Incidenc
     }
   }
 
+  auto sq = polymake::topaz::squeeze_faces(IncidenceMatrix<>(triang_boundary));
   perl::ListReturn result;
-  result << Array< Set<int> >(n_simplices,entire(triang_boundary))
+  result << sq.first << sq.second
          << facet_triag;
   return result;
 }

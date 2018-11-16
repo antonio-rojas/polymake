@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -38,7 +38,7 @@ perl::Object cone(perl::Object p_in, int k, perl::OptionSet options)
       assign_max(k,1);
    }
 
-   for (Entire< Array< Set<int> > >::iterator it=entire(C); !it.at_end(); ++it)
+   for (auto it=entire(C); !it.at_end(); ++it)
       *it += sequence(n_v,k);
 
    perl::Object p_out("SimplicialComplex");
@@ -50,7 +50,7 @@ perl::Object cone(perl::Object p_in, int k, perl::OptionSet options)
       hash_set<std::string> old_L(L.begin(), L.end());
 
       if (!apex_labels.empty()) {
-         for (Entire< Array<std::string> >::const_iterator l=entire(apex_labels); !l.at_end(); ++l)
+         for (auto l=entire(apex_labels); !l.at_end(); ++l)
             if (! old_L.insert(*l).second)
                throw std::runtime_error("cone - apex labels not unique");
 
@@ -98,7 +98,14 @@ UserFunction4perl("# @category Producing a new simplicial complex from others"
                   "#  In the case the input complex has already vertex labels of this kind,"
                   "#  the duplicates are avoided."
                   "# @option Bool no_labels Do not create [[VERTEX_LABELS]]. default: 0"
-                  "# @return SimplicialComplex",
+                  "# @return SimplicialComplex"
+                  "# @example The following creates the cone with two apices over the triangle,"
+                  "# with custom apex labels. The resulting complex is the 4-simplex."
+                  "# > $c = cone(simplex(2),2,apex_labels=>['foo','bar']);"
+                  "# > print $c->FACETS;"
+                  "# | {0 1 2 3 4}"
+                  "# > print $c->VERTEX_LABELS;"
+                  "# | 0 1 2 foo bar",
                   &cone, "cone(SimplicialComplex; $=0, { apex_labels => undef, no_labels => 0 })");
 } }
 

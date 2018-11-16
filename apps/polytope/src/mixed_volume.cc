@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -14,8 +14,12 @@
 --------------------------------------------------------------------------------
 */
 
-#include "polymake/polytope/minkowski_sum_fukuda.h"
+#include "polymake/client.h"
 #include "polymake/linalg.h"
+#include "polymake/Array.h"
+#include "polymake/Matrix.h"
+#include "polymake/Graph.h"
+#include "polymake/polytope/solve_LP.h"
 
 /*
   http://www.uni-frankfurt.de/fb/fb12/mathematik/dm/personen/steffens/Dokumente/MV_Computation1.pdf   [1]
@@ -24,13 +28,11 @@
 
 namespace polymake { namespace polytope {
 
-namespace {
-  // the following typedefs are deferred until c++11
-  // typedef Array<Matrix<E> > matrix_list;
-  // typedef Array<Vector<E> > vector_list;
-  // typedef std::list<Matrix<E> > clist;     // constraint list
-  typedef Array<Graph<Undirected> > graph_list;
-}
+template <typename E>
+using matrix_list = Array<Matrix<E>>;
+template <typename E>
+using vector_list = Array<Vector<E>>;
+using graph_list = Array<Graph<Undirected>>;
 
 template<typename E>
 Matrix<E> list2matrix(const std::vector<Matrix<E> >& v, const int rows, const int cols)
@@ -47,17 +49,17 @@ Matrix<E> list2matrix(const std::vector<Matrix<E> >& v, const int rows, const in
 template<typename E>
 E solve_lp_mixed_volume(const Matrix<E>& M, const Vector<E>& objective)
 {
-    typedef typename choose_solver<E>::solver Solver;
-    Solver solver;
-    Matrix<E> eqs(M.cols()-1,M.cols());
-    for (int j=0;j<M.cols()-1;++j)
-       eqs.row(j)=unit_vector<E>(M.cols(),j+1);
-    typename Solver::lp_solution S=solver.solve_lp(eqs, M, objective, 1);
-    return S.first;
+    Matrix<E> eqs(M.cols()-1, M.cols());
+    for (int j=0; j<M.cols()-1; ++j)
+       eqs.row(j) = unit_vector<E>(M.cols(),j+1);
+    const auto S = solve_LP(eqs, M, objective, true);
+    if (S.status != LP_status::valid)
+       throw std::runtime_error("mixed_volume: wrong LP");
+    return S.objective_value;
 }
 
 template<typename E>
-Matrix<E> construct_A(const int n, const Array<int>& r, const Array<Matrix<E> >& polytopes, const Array<Vector<E> >& lifted_edges)
+Matrix<E> construct_A(const int n, const Array<int>& r, const matrix_list<E>& polytopes, const vector_list<E>& lifted_edges)
 {
     std::vector<Matrix<E> > c;
     int R=0;
@@ -90,7 +92,7 @@ bool lower_envelope_check(Matrix<E>& A, const int n, const int k, const Array<in
 }
 
 template<typename E>
-E volumen(const int n, const Array<int>& node, const Array<int>& next, const Array<Matrix<E> >& polytopes, const graph_list& graphs)
+E volume(const int n, const Array<int>& node, const Array<int>& next, const matrix_list<E>& polytopes, const graph_list& graphs)
 {
     Matrix<E> A(1,polytopes[0].cols());
     for (int j=0; j<n; ++j) {
@@ -109,10 +111,10 @@ E volumen(const int n, const Array<int>& node, const Array<int>& next, const Arr
 template <typename E>
 E mixed_volume(const Array<perl::Object>& summands)
 {
-   E vol = 0;             // mixedVolume
+   E vol(0);             // mixedVolume
    const int n = summands.size();      // number of (input)polytopes
-   Array<Matrix<E>> polytopes(n);      // stores matrices s.t. the i-th entry is a discribtion of P_j by vertices
-   Array<Vector<E>> lifted_edges(n);
+   matrix_list<E> polytopes(n);      // stores matrices s.t. the i-th entry is a discribtion of P_j by vertices
+   vector_list<E> lifted_edges(n);
    graph_list graphs(n);         // stores all graphs from the input polytopes P_j
    Array<int> node(n);
    Array<int> next(n);
@@ -150,12 +152,12 @@ E mixed_volume(const Array<perl::Object>& summands)
          if (*it>i) {
             temp = (polytopes[j].row(i)+polytopes[j].row(*it))/2;
             temp = (temp | (((lifted_edges[j])[i]+(lifted_edges[j])[*it])/2));
-            temp = temp.slice(1,temp.size()-1);
+            temp = temp.slice(range_from(1));
             if (lower_envelope_check(A, n, j+1, r, Vector<E>(m+temp))) {
                node[j]=i;
                next[j]=count;
                if (j==n-1) {
-                  vol+=volumen(n,node,next,polytopes,graphs);
+                  vol+=volume(n,node,next,polytopes,graphs);
                } else {
                   ++j;
                   m+=temp;
@@ -174,7 +176,7 @@ E mixed_volume(const Array<perl::Object>& summands)
                ++it;
             temp = (polytopes[j].row(i)+polytopes[j].row(*it))/2;
             temp = (temp | (((lifted_edges[j])[i]+(lifted_edges[j])[*it])/2));
-            temp = temp.slice(1,temp.size()-1);
+            temp = temp.slice(range_from(1));
             m = m-temp;
             ++it;
          }
@@ -192,7 +194,8 @@ UserFunctionTemplate4perl("# @category Triangulations, subdivisions and volume"
                           "# @param Polytope<Scalar> P2 second polytope"
                           "# @param Polytope<Scalar> Pn last polytope"
                           "# @return Scalar mixed volume"
-                          "# @example > print mixed_volume(cube(2),simplex(2));"
+                          "# @example"
+                          "# > print mixed_volume(cube(2),simplex(2));"
                           "# | 4",
                           "mixed_volume<E>(Polytope<E> +)");
 

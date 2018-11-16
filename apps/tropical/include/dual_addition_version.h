@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -50,21 +50,15 @@ namespace polymake { namespace tropical {
 		}
 
 	template <typename Addition, typename Scalar>
-		Ring<TropicalNumber<typename Addition::dual, Scalar> > dual_addition_version(const Ring<TropicalNumber<Addition, Scalar> > &r) {
-			return Ring<TropicalNumber<typename Addition::dual, Scalar> >(r.names());	
-		}
-
-	template <typename Addition, typename Scalar>
 		Polynomial<TropicalNumber<typename Addition::dual, Scalar> > dual_addition_version(const Polynomial<TropicalNumber<Addition, Scalar> > &p, bool strong = true) {
-			Ring<TropicalNumber<typename Addition::dual, Scalar> > dualr = dual_addition_version(p.get_ring());
 			Polynomial<TropicalNumber<typename Addition::dual, Scalar> > dualp(
-					p.monomials_as_matrix(),
-					dual_addition_version(p.coefficients_as_vector(),strong),dualr);
+                                        dual_addition_version(p.coefficients_as_vector(), strong),
+					p.monomials_as_matrix());
 			return dualp;
 		}
 
 	
 
-}}
+} }
 
 #endif

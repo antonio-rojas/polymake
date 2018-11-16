@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -39,7 +39,7 @@ void orthogonalize(Matrix<E>& Points, Matrix<E>& LS)
     }
 
     // moving one point to the origin (watch out for rays)
-    Vector<E> a = (0|Points.row(*noRays.begin()).slice(1));
+    Vector<E> a = (0|Points.row(*noRays.begin()).slice(range_from(1)));
     Matrix<E> m = repeat_row(a, noRays.size());
     Points.minor(noRays,All) -= m;
     
@@ -121,7 +121,8 @@ UserFunctionTemplate4perl("# @category Producing a polytope from polytopes"
                           "# Produces the pointed part of a polyhedron"
                           "# @param Polytope P"
                           "# @return Polytope"
-                          "# @example > $p = new Polytope(POINTS=>[[1,0,0],[1,0,1],[1,1,0],[1,1,1],[0,1,0],[0,0,1]]);"
+                          "# @example"
+                          "# > $p = new Polytope(POINTS=>[[1,0,0],[1,0,1],[1,1,0],[1,1,1],[0,1,0],[0,0,1]]);"
                           "# > $pp = pointed_part($p);"
                           "# > print $pp->VERTICES;"
                           "# | 1 0 0"

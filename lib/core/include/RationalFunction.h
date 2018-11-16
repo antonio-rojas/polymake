@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -23,24 +23,19 @@ namespace pm {
 
 template <typename T, typename Coefficient, typename Exponent>
 struct is_unipolynomial_type {
-   static const bool value=is_derived_from<T, UniMonomial<Coefficient, Exponent> >::value ||
-                           is_derived_from<T, UniTerm<Coefficient, Exponent> >::value ||
-                           is_derived_from<T, UniPolynomial<Coefficient, Exponent> >::value;
+   static const bool value=is_derived_from<T, UniPolynomial<Coefficient, Exponent> >::value;
 };
 
-template <typename Coefficient, typename Exponent>
+template <typename Coefficient=Rational, typename Exponent=int>
 class RationalFunction {
 public:
    typedef UniPolynomial<Coefficient, Exponent> polynomial_type;
    typedef typename polynomial_type::term_hash term_hash;
-   typedef typename polynomial_type::ring_type ring_type;
-   typedef typename polynomial_type::term_type term_type;
-   typedef typename polynomial_type::monomial_type monomial_type;
    typedef Coefficient coefficient_type;
    typedef Exponent exponent_type;
 
    template <typename T>
-   using fits_as_coefficient = typename monomial_type::template fits_as_coefficient<T>;
+   using fits_as_coefficient = typename polynomial_type::template fits_as_coefficient<T>;
 
    template <typename T>
    struct fits_as_particle
@@ -49,41 +44,20 @@ public:
    /// Construct a zero value.
    RationalFunction()
       : num()
-      , den(num.get_ring().one_coef(), num.get_ring()) {}
-
-   /// Construct a zero value of explicitely given ring type.
-   explicit RationalFunction(const ring_type& r)
-      : num(r)
-      , den(r.one_coef(), r) {}
+      , den(one_value<coefficient_type>()) {}
 
    /// Construct a value with denominator equal to 1.
    template <typename T, typename enabled=typename std::enable_if<fits_as_particle<T>::value>::type>
    explicit RationalFunction(const T& c)
       : num(c)
-      , den(num.get_ring().one_coef(), num.get_ring()) {}
-
-   /// Construct a constant value of explicitely given ring type.
-   template <typename T, typename enabled=typename std::enable_if<fits_as_coefficient<T>::value>::type>
-   RationalFunction(const T& c, const ring_type& r)
-      : num(c, r)
-      , den(r.one_coef(), r) {}
+      , den(one_value<coefficient_type>()) {}
 
    /// Construct a value with denominator equal to a constant scalar.
    template <typename T1, typename T2>
    RationalFunction(const T1& c1, const T2& c2,
                     typename std::enable_if<fits_as_particle<T1>::value && fits_as_coefficient<T2>::value, void**>::type=nullptr)
       : num(c1)
-      , den(num.get_ring().one_coef(), num.get_ring())
-   {
-      num /= c2;
-   }
-
-   /// Construct a constant value expressed as ratio of two scalars, of an explicitely given ring type.
-   template <typename T1, typename T2,
-             typename enabled=typename std::enable_if<fits_as_coefficient<T1>::value && fits_as_coefficient<T2>::value>::type>
-   RationalFunction(const T1& c1, const T2& c2, const ring_type& r)
-      : num(c1, r)
-      , den(r.one_coef(), r)
+      , den(one_value<coefficient_type>())
    {
       num /= c2;
    }
@@ -93,7 +67,7 @@ public:
    RationalFunction(const T1& c1, const T2& p2,
                     typename std::enable_if<fits_as_coefficient<T1>::value &&
                                             is_unipolynomial_type<T2, Coefficient, Exponent>::value, void**>::type=nullptr)
-      : num(c1, p2.get_ring())
+      : num(c1)
       , den(p2)
    {
       if (is_zero(p2)) throw GMP::ZeroDivide();
@@ -106,13 +80,10 @@ public:
                     typename std::enable_if<is_unipolynomial_type<T1, Coefficient, Exponent>::value &&
                                             is_unipolynomial_type<T2, Coefficient, Exponent>::value, void**>::type=nullptr)
    {
-      if (p1.get_ring() != p2.get_ring()) throw std::runtime_error("RationalFunction - arguments of different rings");
       if (is_zero(p2)) throw GMP::ZeroDivide();
       simplify(p1, p2);
       normalize_lc();
    }
-
-   const ring_type& get_ring() const { return num.get_ring(); }
 
    typedef polynomial_type numerator_type;
    typedef polynomial_type denominator_type;
@@ -295,7 +266,7 @@ public:
       if (__builtin_expect(!is_zero(r), 1))
          return RationalFunction(l.num * r, l.den, std::true_type());
       else
-         return RationalFunction(l.get_ring());
+         return RationalFunction();
    }
 
    template <typename T> friend
@@ -305,7 +276,7 @@ public:
       if (__builtin_expect(!is_zero(l), 1))
          return RationalFunction(l * r.num, r.den, std::true_type());
       else
-         return RationalFunction(r.get_ring());
+         return RationalFunction();
    }
 
    template <typename T> friend
@@ -322,7 +293,7 @@ public:
       if (__builtin_expect(r.num.trivial(), 0)) {
          throw GMP::ZeroDivide();
       } else if (__builtin_expect(is_zero(l), 0)) {
-         return RationalFunction(r.get_ring());
+         return RationalFunction();
       } else {
          return RationalFunction(l * r.den, r.num, std::false_type());
       }
@@ -333,7 +304,7 @@ public:
    operator* (const RationalFunction& l, const T& r)
    {
       if (__builtin_expect(is_zero(r), 1)) {
-         return RationalFunction(l.get_ring());
+         return RationalFunction();
       } else if (__builtin_expect(l.num.trivial(), 0)) {
          return l;
       } else {
@@ -386,7 +357,7 @@ public:
       if (__builtin_expect(r.num.trivial(), 1)) {
          throw GMP::ZeroDivide();
       } else if (__builtin_expect(is_zero(l), 0)) {
-         return RationalFunction(r.get_ring());
+         return RationalFunction();
       } else {
          const ExtGCD<polynomial_type> x = ext_gcd(r.num, l, false);
          return RationalFunction(r.den * x.k2, x.k1, std::false_type());
@@ -447,7 +418,7 @@ public:
    typename std::enable_if<fits_as_particle<T>::value, bool>::type
    operator== (const RationalFunction& l, const T& r)
    {
-      return l.den.unit() && l.num == r;
+      return l.den.is_one() && l.num == r;
    }
 
    template <typename T> friend
@@ -477,6 +448,30 @@ public:
       return !(r == l);
    }
 
+   static
+   const Array<std::string>& get_var_names()
+   {
+      return polynomial_type::get_var_names();
+   }
+
+   static
+   void set_var_names(const Array<std::string>& names)
+   {
+      polynomial_type::set_var_names(names);
+   }
+
+   static
+   void reset_var_names()
+   {
+      polynomial_type::reset_var_names();
+   }
+
+   static
+   void swap_var_names(PolynomialVarNames& other_names)
+   {
+      polynomial_type::swap_var_names(other_names);
+   }
+
    template <typename Output> friend
    Output& operator<< (GenericOutput<Output>& out, const RationalFunction& rf)
    {
@@ -486,9 +481,16 @@ public:
 
    explicit operator const polynomial_type& () const
    {
-      if (!den.unit())
+      if (!den.is_one())
          throw std::runtime_error("Denominator is not one; cannot convert to a polynomial");
       return num;
+   }
+
+   size_t get_hash() const noexcept
+   {
+      size_t h=num.get_hash();
+      hash_combine(h, den.get_hash());
+      return h;
    }
 
 protected:
@@ -506,7 +508,7 @@ protected:
    void normalize_lc()
    {
       if (num.trivial()) {
-         den=polynomial_type(get_ring().one_coef(), get_ring());
+         den=polynomial_type(one_value<coefficient_type>());
       } else {
          const Coefficient den_lc=den.lc();
          if (!is_one(den_lc)) {
@@ -519,94 +521,42 @@ protected:
    // constructor helpers
 
    void simplify(const Coefficient& c1, const Exponent& e1,
-                 const Coefficient& c2, const Exponent& e2,
-                 const ring_type& ring)
+                 const Coefficient& c2, const Exponent& e2)
    {
       if (e1 < e2)
       {
          // x^e1 / x^e2  ==  1 / x^(e2-e1)
-         num=term_type(c1, ring);
-         den=term_type(monomial_type(e2-e1, ring), c2);
+         num=polynomial_type(c1);
+         den=polynomial_type(e2-e1, c2);
       }
       else
       {
          // x^e1 / x^e2  ==  x^(e1-e2)
-         num=term_type(monomial_type(e1-e2, ring), c1);
-         den=term_type(c2, ring);
+         num=polynomial_type(e1-e2, c1);
+         den=polynomial_type(c2);
       }
    }
 
    void simplify(const polynomial_type& p1,
-                 const Coefficient& c2, const Exponent& e2,
-                 const ring_type& ring)
+                 const Coefficient& c2, const Exponent& e2)
    {
       const Exponent e1=p1.lower_deg();
       if (e1 < e2)
       {
          // r(x)*x^e1 / x^e2  ==  r(x) / x^(e2-e1)
          if ( !is_zero(e1) ) {
-            div_exact(p1, monomial_type(e1, ring)).swap(num);
+            div_exact(p1, polynomial_type(e1, one_value<coefficient_type>())).swap(num);
          } else {
             num=p1;
          }
-         den=term_type(monomial_type(e2-e1, ring), c2);
+         den=polynomial_type(polynomial_type(e2-e1, one_value<coefficient_type>()), c2);
       }
       else
       {
          // r(x)*x^e1 / x^e2  ==  r(x)*x^(e1-e2)
-         div_exact(p1, monomial_type(e2, ring)).swap(num);
-         den=term_type(c2, ring);
+         div_exact(p1, polynomial_type(e2, one_value<coefficient_type>())).swap(num);
+         den=polynomial_type(c2);
       }
-   }
-
-   void simplify(const monomial_type& p1, const monomial_type& p2)
-   {
-      const ring_type& ring=p1.get_ring();
-      simplify(ring.one_coef(), p1.get_value(), ring.one_coef(), p2.get_value(), ring);
-   }
-
-   void simplify(const monomial_type& p1, const term_type& p2)
-   {
-      const ring_type& ring=p1.get_ring();
-      simplify(ring.one_coef(), p1.get_value(), p2.get_value().second, p2.get_value().first, ring);
-   }
-
-   void simplify(const term_type& p1, const monomial_type& p2)
-   {
-      const ring_type& ring=p1.get_ring();
-      simplify(p1.get_value().second, p1.get_value().first, ring.one_coef(), p2.get_value(), ring);
-   }
-
-   void simplify(const term_type& p1, const term_type& p2)
-   {
-      const ring_type& ring=p1.get_ring();
-      simplify(p1.get_value().second, p1.get_value().first, p2.get_value().second, p2.get_value().first, ring);
-   }
-
-   void simplify(const polynomial_type& p1, const monomial_type& p2)
-   {
-      const ring_type& ring=p1.get_ring();
-      simplify(p1, ring.one_coef(), p2.get_value(), ring);
-   }
-
-   void simplify(const polynomial_type& p1, const term_type& p2)
-   {
-      const ring_type& ring=p1.get_ring();
-      simplify(p1, p2.get_value().second, p2.get_value().first, ring);
-   }
-
-   void simplify(const monomial_type& p1, const polynomial_type& p2)
-   {
-      const ring_type& ring=p1.get_ring();
-      simplify(p2, ring.one_coef(), p1.get_value(), ring);
-      num.swap(den);
-   }
-
-   void simplify(const term_type& p1, const polynomial_type& p2)
-   {
-      const ring_type& ring=p1.get_ring();
-      simplify(p2, p1.get_value().second, p1.get_value().first, ring);
-      num.swap(den);
    }
 
    void simplify(const polynomial_type& p1, const polynomial_type& p2)
@@ -631,23 +581,14 @@ struct spec_object_traits< Serialized< RationalFunction<Coefficient, Exponent> >
    typedef RationalFunction<Coefficient, Exponent> masquerade_for;
 
    typedef cons<typename RationalFunction<Coefficient, Exponent>::term_hash,
-           cons<typename RationalFunction<Coefficient, Exponent>::term_hash,
-                typename RationalFunction<Coefficient, Exponent>::ring_type> > elements;
+                typename RationalFunction<Coefficient, Exponent>::term_hash> elements;
 
    template <typename Me, typename Visitor>
    static void visit_elements(Me& me, Visitor& v)
    {
-      v << me.num.data->the_terms << me.den.data->the_terms << me.num.data->ring;
-      set_den_ring(me.num, me.den);
+      v << me.num.get_mutable_terms() << me.den.impl_ptr->get_mutable_terms();
    }
 
-private:
-   static void set_den_ring(const UniPolynomial<Coefficient, Exponent>&, const UniPolynomial<Coefficient, Exponent>&) {}
-
-   static void set_den_ring(UniPolynomial<Coefficient, Exponent>& num, UniPolynomial<Coefficient, Exponent>& den)
-   {
-      den.data->ring=num.data->ring;
-   }
 };
 
 template <typename Coefficient, typename Exponent>
@@ -666,7 +607,7 @@ struct choose_generic_object_traits< RationalFunction<Coefficient, Exponent>, fa
    static
    bool is_one(const persistent_type& p)
    {
-      return numerator(p).unit() && denominator(p).unit();
+      return numerator(p).is_one() && denominator(p).is_one();
    }
 
    static
@@ -688,6 +629,14 @@ template <typename Coefficient, typename Exponent>
 struct algebraic_traits< RationalFunction<Coefficient, Exponent> > {
    typedef RationalFunction<typename algebraic_traits<Coefficient>::field_type, Exponent> field_type;
 };
+
+namespace polynomial_impl {
+
+template <typename Coefficient, typename Exponent>
+struct nesting_level< RationalFunction<Coefficient, Exponent> >
+  : int_constant<nesting_level<Coefficient>::value+1> {};
+
+}
 
 template <typename Coefficient, typename Exponent, typename T, typename TModel>
 struct isomorphic_types_impl<RationalFunction<Coefficient, Exponent>, T,
@@ -719,39 +668,9 @@ operator/ (const UniPolynomial<Coefficient, Exponent>& p1, const T& p2)
 }
 
 template <typename Coefficient, typename Exponent, typename T> inline
-typename std::enable_if<is_unipolynomial_type<T, Coefficient, Exponent>::value, RationalFunction<Coefficient, Exponent>>::type
-operator/ (const UniTerm<Coefficient, Exponent>& p1, const T& p2)
-{
-   return RationalFunction<Coefficient, Exponent>(p1, p2);
-}
-
-template <typename Coefficient, typename Exponent, typename T> inline
-typename std::enable_if<is_unipolynomial_type<T, Coefficient, Exponent>::value, RationalFunction<Coefficient, Exponent>>::type
-operator/ (const UniMonomial<Coefficient, Exponent>& p1, const T& p2)
-{
-   return RationalFunction<Coefficient, Exponent>(p1, p2);
-}
-
-template <typename Coefficient, typename Exponent, typename T> inline
 typename std::enable_if<RationalFunction<Coefficient, Exponent>::template fits_as_coefficient<T>::value,
                         RationalFunction<Coefficient, Exponent>>::type
 operator/ (const T& p1, const UniPolynomial<Coefficient, Exponent>& p2)
-{
-   return RationalFunction<Coefficient, Exponent>(p1, p2);
-}
-
-template <typename Coefficient, typename Exponent, typename T> inline
-typename std::enable_if<RationalFunction<Coefficient, Exponent>::template fits_as_coefficient<T>::value,
-                        RationalFunction<Coefficient, Exponent>>::type
-operator/ (const T& p1, const UniTerm<Coefficient, Exponent>& p2)
-{
-   return RationalFunction<Coefficient, Exponent>(p1, p2);
-}
-
-template <typename Coefficient, typename Exponent, typename T> inline
-typename std::enable_if<RationalFunction<Coefficient, Exponent>::template fits_as_coefficient<T>::value,
-                        RationalFunction<Coefficient, Exponent>>::type
-operator/ (const T& p1, const UniMonomial<Coefficient, Exponent>& p2)
 {
    return RationalFunction<Coefficient, Exponent>(p1, p2);
 }

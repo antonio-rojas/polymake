@@ -77,14 +77,13 @@ perl::Object hurwitz_marked_cycle(int k, Vector<int> degree,
 
     //Since we restrict ourselves to M_0,N x {0}, we actually ignore the last coefficient
     //of ev_i and replace it by the constant coefficient 0 (for the min-max-function)
-    Matrix<int> monoms(evi_matrix.minor(All,~scalar2set(evi_matrix.cols()-1)));
+    Matrix<int> monoms(evi_matrix.minor(All, sequence(0, evi_matrix.cols()-1)));
 
     Vector<TropicalNumber<Addition> > coeffs(2);
     coeffs[0] = TropicalNumber<Addition>(0);
     coeffs[1] = TropicalNumber<Addition>(pullback_points[i-n-2]);
 
-    Ring<TropicalNumber<Addition> > tropring(evi_matrix.cols()-1);
-    Polynomial<TropicalNumber<Addition> > p(monoms,coeffs,tropring);
+    Polynomial<TropicalNumber<Addition>> p(coeffs, monoms);
     perl::Object pb = call_function("rational_fct_from_affine_numerator", p);
     pb_functions.push_back(pb);
   }//END compute pullback functions

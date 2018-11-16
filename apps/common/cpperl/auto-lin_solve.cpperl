@@ -1,0 +1,5 @@
+{"app": "common",
+ "inst": [
+  {"args": ["perl::Canned<const Wary<Matrix<Rational>>&>", "perl::Canned<const Wary<Vector<Rational>>&>"], "func": "lin_solve", "include": ["polymake/IncidenceMatrix.h", "polymake/Matrix.h", "polymake/Rational.h", "polymake/Vector.h", "polymake/linalg.h"], "sig": "lin_solve.X4.X4"},
+ null ],
+"version": 3}

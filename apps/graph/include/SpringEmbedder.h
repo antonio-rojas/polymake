@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -80,7 +80,7 @@ public:
    {
       V.resize(X.rows(),X.cols());
 
-      for (Entire< Rows< Matrix<double> > >::iterator x=entire(rows(X));  !x.at_end();  ++x, ++src)
+      for (auto x=entire(rows(X));  !x.at_end();  ++x, ++src)
          *x=*src * eff_scale;
       V.fill(0.);
 

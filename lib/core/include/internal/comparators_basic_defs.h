@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -71,7 +71,7 @@ template <typename T> struct minimal : extremal<T, false> {};
 
 namespace operations {
 
-template <typename T1, typename T2=T1, bool ordered=is_ordered<T1>::value>
+template <typename T1, typename T2>
 struct cmp_basic {
    typedef T1 first_argument_type;
    typedef T2 second_argument_type;
@@ -81,19 +81,6 @@ struct cmp_basic {
    cmp_value operator() (const Left& a, const Right& b) const
    {
       return a<b ? cmp_lt : cmp_value(a>b);
-   }
-};
-
-template <typename T1, typename T2>
-struct cmp_basic<T1, T2, false> {
-   typedef T1 first_argument_type;
-   typedef T2 second_argument_type;
-   typedef cmp_value result_type;
-
-   template <typename Left, typename Right>
-   cmp_value operator() (const Left& a, const Right& b) const
-   {
-      return a==b ? cmp_eq : cmp_ne;
    }
 };
 
@@ -117,15 +104,6 @@ struct cmp_extremal {
    }
 };
 
-template <typename T1, typename T2=T1, bool ordered=(is_ordered<T1>::value && is_ordered<T2>::value)>
-struct cmp_extremal_if_ordered : cmp_extremal {};
-
-template <typename T1, typename T2>
-struct cmp_extremal_if_ordered<T1, T2, false> {
-   // some impossible combination...
-   cmp_value operator() (void**, void**) const;
-};
-
 template <typename T, bool use_zero_test=has_zero_value<T>::value>
 struct cmp_partial_opaque {
    template <typename Left, typename Iterator2>
@@ -137,7 +115,7 @@ struct cmp_partial_opaque {
    template <typename Iterator1, typename Right>
    cmp_value operator() (partial_right, const Iterator1&, const Right&) const
    {
-      return is_ordered<Right>::value ? cmp_lt : cmp_ne;
+      return cmp_lt;
    }
 };
 
@@ -169,9 +147,14 @@ struct cmp_partial_scalar {
    }
 };
 
-template <typename T1, typename T2=T1,
-          bool is_signed=(std::numeric_limits<T1>::is_signed && std::numeric_limits<T2>::is_signed)>
-struct cmp_scalar : cmp_extremal, cmp_partial_scalar {
+template <typename T1, typename T2=T1, typename enabled=void>
+struct cmp_scalar { };
+
+template <typename T1, typename T2>
+struct cmp_scalar<T1, T2, typename std::enable_if<std::numeric_limits<T1>::is_signed && std::numeric_limits<T2>::is_signed &&
+                                                  are_less_greater_comparable<T1, T2>::value>::type>
+   : cmp_extremal
+   , cmp_partial_scalar {
 
    typedef T1 first_argument_type;
    typedef T2 second_argument_type;
@@ -193,15 +176,18 @@ struct cmp_scalar : cmp_extremal, cmp_partial_scalar {
                              std::numeric_limits<Left>::is_integer && std::numeric_limits<Right>::is_signed), cmp_value>::type
    operator() (const Left& a, const Right& b) const
    {
-      return cmp_basic<Left, Right, true>()(a, b);
+      return cmp_basic<Left, Right>()(a, b);
    }
 };
 
 template <typename T1, typename T2>
-struct cmp_scalar<T1, T2, false> : cmp_extremal, cmp_basic<T1, T2, true> {
+struct cmp_scalar<T1, T2, typename std::enable_if<!(std::numeric_limits<T1>::is_signed && std::numeric_limits<T2>::is_signed) &&
+                                                  are_less_greater_comparable<T1, T2>::value>::type>
+   : cmp_extremal
+   , cmp_basic<T1, T2> {
 
    using cmp_extremal::operator();
-   using cmp_basic<T1, T2, true>::operator();
+   using cmp_basic<T1, T2>::operator();
 
    template <typename Left, typename Iterator>
    cmp_value operator() (partial_left, const Left& a, const Iterator&) const
@@ -215,11 +201,49 @@ struct cmp_scalar<T1, T2, false> : cmp_extremal, cmp_basic<T1, T2, true> {
    }
 };
 
-template <typename T1, typename T2=T1>
-struct cmp_opaque : cmp_extremal_if_ordered<T1>, cmp_basic<T1, T2>, cmp_partial_opaque<T1> {
-   using cmp_extremal_if_ordered<T1>::operator();
-   using cmp_basic<T1, T2>::operator();
-   using cmp_partial_opaque<T1>::operator();
+template <typename T1, typename T2=T1, typename enabled=void>
+struct cmp_unordered_impl { };
+
+template <typename T1, typename T2>
+struct cmp_unordered_impl<T1, T2, typename std::enable_if<are_comparable<T1, T2>::value>::type> {
+   typedef T1 first_argument_type;
+   typedef T2 second_argument_type;
+   typedef cmp_value result_type;
+
+   static const bool partially_defined=has_zero_value<T1>::value && has_zero_value<T2>::value;
+
+   template <typename Left, typename Right>
+   cmp_value operator()(const Left& l, const Right& r) const
+   {
+      return l==r ? cmp_eq : cmp_ne;
+   }
+
+   template <typename Left, typename Iterator>
+   typename std::enable_if<has_zero_value<Left>::value, cmp_value>::type
+   operator() (partial_left, const Left& a, const Iterator&) const
+   {
+      return is_zero(a) ? cmp_eq : cmp_ne;
+   }
+
+   template <typename Iterator, typename Right>
+   typename std::enable_if<has_zero_value<Right>::value, cmp_value>::type
+   operator() (partial_right, const Iterator&, const Right& b) const
+   {
+      return is_zero(b) ? cmp_eq : cmp_ne;
+   }
+};
+
+template <typename T, typename enabled=void>
+struct cmp_opaque { };
+
+template <typename T>
+struct cmp_opaque<T, typename std::enable_if<is_less_greater_comparable<T>::value>::type>
+   : cmp_extremal
+   , cmp_basic<T, T>
+   , cmp_partial_opaque<T> {
+   using cmp_extremal::operator();
+   using cmp_basic<T, T>::operator();
+   using cmp_partial_opaque<T>::operator();
 };
 
 template <typename Char, typename Traits, typename Alloc>

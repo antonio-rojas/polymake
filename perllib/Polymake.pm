@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2016
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -38,7 +38,7 @@ use Polymake::Ext;
 # Global variables
 #
 
-declare $Version="3.0.6";
+declare $Version="3.2";
 declare $VersionNumber=eval "v$Version";        # for string comparisons with vM.N literals
 
 declare ($Scope,                # Scope object for the current cycle
@@ -47,11 +47,8 @@ declare ($Scope,                # Scope object for the current cycle
 
 declare $Shell=new NoShell;     # alternatively: Shell object listening to the console or some pipe
 
-declare $CoreVCS;               # version control system for core source files
-if ($DeveloperMode) {
-   require Polymake::SourceVersionControl;
-   $CoreVCS=new SourceVersionControl($InstallTop);
-}
+# resources for third-party programs launched by polymake
+declare $Resources=$ENV{POLYMAKE_RESOURCE_DIR} // "$InstallTop/resources";
 
 ########################################################################
 #
@@ -80,6 +77,7 @@ require Polymake::Core::Object;
 require Polymake::Core::Application;
 require Polymake::Core::Extension;
 require Polymake::Core::CPlusPlus;
+require Polymake::Core::StoredScript;
 require Polymake::Core::RuleFilter;
 
 declare $Custom=new Core::Customize;
@@ -114,7 +112,7 @@ sub greeting {
 
    my @messages = ("polymake version $full_version", <<'.', <<'.');
 
-Copyright (c) 1997-2016
+Copyright (c) 1997-2018
 Ewgenij Gawrilow, Michael Joswig (TU Berlin)
 http://www.polymake.org
 .
@@ -124,6 +122,14 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
 .
 
    return join '',@messages[0 .. $verbose];
+}
+
+# initialize some modules in proper order
+# "config path" =>
+sub init {
+   &Polymake::Core::UserSettings::init;
+   Polymake::Core::Extension::init();
+   Polymake::Core::CPlusPlus::init();
 }
 
 ########################################################################

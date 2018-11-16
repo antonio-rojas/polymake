@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2016
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -15,6 +15,7 @@
 
 use strict;
 use namespaces;
+use warnings qw(FATAL void syntax misc);
 
 package Polymake::Core::HelpAsHTML;
 
@@ -167,7 +168,7 @@ sub example {
    my $save_mode=$self->writer->getDataMode()
      and $self->writer->setDataMode(0);
    my @buffer;
-   foreach my $line (split "\n", $example) {
+   foreach my $line (split /\n/, $example) {
       # match > or | at the beginning but check > with lookahead to keep it in $'
       if ($line =~ /^\s* (?: \| | (?= > ) ) /x) {
          $line = $';
@@ -198,7 +199,7 @@ sub examples {
    writeBlock($self, @$examples > 1 ? "Examples:" : "Example:", "p");
    foreach (@$examples) {
       $self->writer->startTag([ $xhtmlns, "p" ]);
-      example($self, $_);
+      example($self, $_->body);
       $self->writer->endTag;
    }
 }

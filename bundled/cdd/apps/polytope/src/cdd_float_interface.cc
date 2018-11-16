@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -16,11 +16,10 @@
 
 #define USE_DDF_
 #include "polymake/polytope/cdd_interface_impl.h"
-#include <sstream>
 
 namespace polymake { namespace polytope { namespace cdd_interface {
 
-template <> inline
+template <>
 double cdd_lp_sol<double>::optimal_value() const
 {
    return double(ptr->optvalue[0]);
@@ -28,7 +27,8 @@ double cdd_lp_sol<double>::optimal_value() const
 
 template class cdd_matrix<double>;
 template class cdd_polyhedron<double>;
-template class solver<double>;
+template class ConvexHullSolver<double>;
+template class LP_Solver<double>;
 
 } } }
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -50,7 +50,7 @@ void max_cliques_iterator<Graph>::init()
    // The reverse search part in the increment operator can be efficiently constrained to the neighborhood
    // of the current clique.
 
-   for (typename Entire< Nodes<Graph> >::const_iterator n=entire(nodes(*G)); !n.at_end(); ++n) {
+   for (auto n=entire(nodes(*G)); !n.at_end(); ++n) {
       const int v=n.index();
       if (!n.degree() || n.adjacent_nodes().front()>v)
          Q.push_back(lex_min_clique(v),v);

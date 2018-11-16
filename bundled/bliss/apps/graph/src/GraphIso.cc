@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -190,7 +190,7 @@ GraphIso::find_permutations(const GraphIso& g2, int n_cols) const
 Array<int> GraphIso::canonical_perm() const
 {
    const Array<int> perm(p_impl->src_graph->get_nof_vertices(), p_impl->canon_labels);
-   Array<int> iperm;
+   Array<int> iperm(perm.size());
    // the canonical labels from bliss are an inverse permutation for the nodes
    inverse_permutation(perm,iperm);
    return iperm;

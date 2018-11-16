@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -21,7 +21,7 @@ object ValuatedMatroid {
   # @category Valuation
   # Defines a valuation on each basis. Entry number i is a valuation on 
   # the i-th element of [[BASES]]. Must fulfill the tropical Plücker relations.
-  property VALUATION_ON_BASES : Vector<TropicalNumber<Addition, Scalar> > {
+  property VALUATION_ON_BASES : Vector<TropicalNumber<Addition,Scalar>> {
     sub canonical { &canonicalize_tropical_rays; }
   };
   
@@ -30,7 +30,7 @@ object ValuatedMatroid {
   # the i-th element of [[CIRCUITS]]. Must fulfill the tropical circuit
   # valuation axioms. The representative is normalized such that the first
   # non-tropical-zero entry is 0.
-  property VALUATION_ON_CIRCUITS : Matrix<TropicalNumber<Addition, Scalar> > {
+  property VALUATION_ON_CIRCUITS : Matrix<TropicalNumber<Addition,Scalar>> {
     sub canonical { &canonicalize_tropical_rays; }
   };
 

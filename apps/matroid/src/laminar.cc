@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -17,15 +17,18 @@
 #include "polymake/client.h"
 #include "polymake/IncidenceMatrix.h"
 #include "polymake/Set.h"
-#include "polymake/graph/HasseDiagram.h"
+#include "polymake/graph/Lattice.h"
+#include "polymake/graph/Decoration.h"
 
 namespace polymake { namespace matroid {
 
-   using polymake::graph::HasseDiagram;
+   using graph::Lattice;
+   using graph::lattice::Sequential;
+   using graph::lattice::BasicDecoration;
 
    // Assumes that c1.size() <= c2.size()
-   bool check_circuit_compatibility(const Set<int> &c1, const Set<int> &c2, const HasseDiagram& hd) {
-      const Set<int> relevant_faces = hd.nodes_of_dim( c2.size() - 1);
+   bool check_circuit_compatibility(const Set<int> &c1, const Set<int> &c2, const Lattice<BasicDecoration, Sequential>& hd) {
+      const auto relevant_faces = hd.nodes_of_rank( c2.size() - 1);
       Set<int> closure;
       for(const auto& rf : relevant_faces) {
          const auto& rf_face = hd.face( rf );
@@ -40,15 +43,16 @@ namespace polymake { namespace matroid {
 
    //Checks whether a matroid is laminar
    bool is_laminar_matroid(perl::Object matroid) {
-      polymake::graph::HasseDiagram lattice_of_flats = matroid.give("LATTICE_OF_FLATS");
+      perl::Object lattice_of_flats_obj = matroid.give("LATTICE_OF_FLATS");
+      Lattice<BasicDecoration, Sequential> lattice_of_flats(lattice_of_flats_obj);
       IncidenceMatrix<> circuits = matroid.give("CIRCUITS");
 
       for(auto c1 = entire(rows(circuits)); !c1.at_end(); ++c1) {
          for(auto c2 = c1; !(++c2).at_end();) {
             if( !((*c1) * (*c2)).empty()) {
                const bool flip = (*c2).size() < (*c1).size();
-               if(!check_circuit_compatibility( flip? (*c2) : (*c1), flip? (*c1) : (*c2), 
-                        lattice_of_flats )) return false; 
+               if(!check_circuit_compatibility( flip? (*c2) : (*c1), flip? (*c1) : (*c2),
+                        lattice_of_flats )) return false;
             }
          }
       }

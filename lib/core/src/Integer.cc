@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -15,6 +15,7 @@
 */
 
 #include "polymake/Integer.h"
+#include "polymake/Rational.h"
 #include <cstring>
 #include <unistd.h>
 
@@ -271,6 +272,16 @@ bool Integer::fill_from_file(int fd)
    } while ((consumed+=s)<total);
    _mp_size=_mp_alloc;
    return true;
+}
+
+template <>
+Integer
+pow(const Integer& base, long exp)
+{
+   if (exp >= 0)
+      return Integer::pow(base,exp);
+   else
+      return Integer(Rational::pow(base,exp));
 }
 
 namespace {

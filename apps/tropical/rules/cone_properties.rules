@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2016
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -20,12 +20,12 @@ object Polytope {
 	# Dimension of the tropical projective space which contains the tropical polytope.
 	property PROJECTIVE_AMBIENT_DIM : Int;
 
-	# @category Geometry 
-	# Input points in tropical homogeneous coordinates.  
+	# @category Geometry
+	# Input points in tropical homogeneous coordinates.
 	# This is the fixed system of generators with respect
 	# to which many combinatorial properties are expressed.
-	property POINTS : Matrix<TropicalNumber<Addition,Scalar> > {
-		sub canonical { &canonicalize_to_leading_zero_and_check_columns; } 
+	property POINTS : Matrix<TropicalNumber<Addition,Scalar>> {
+		sub canonical { &canonicalize_to_leading_zero_and_check_columns; }
 	}
 
         # permuting the [[POINTS]]
@@ -42,17 +42,17 @@ object Polytope {
 
 	# @category Geometry
 	# Vertices of the tropical convex hull, a submatrix of [[POINTS]]
-	property VERTICES : Matrix<TropicalNumber<Addition,Scalar> > {
-		sub canonical { &canonicalize_to_leading_zero; }	
+	property VERTICES : Matrix<TropicalNumber<Addition,Scalar>> {
+		sub canonical { &canonicalize_to_leading_zero; }
 	}
 
         # permuting the [[VERTICES]]
 	permutation VertexPerm : PermBase;
-	
+
 	rule VertexPerm.PERMUTATION : VertexPerm.VERTICES, VERTICES {
 		$this->VertexPerm->PERMUTATION=find_permutation($this->VertexPerm->VERTICES, $this->VERTICES);
 	}
-	
+
 	rule VERTICES : VertexPerm.VERTICES, VertexPerm.PERMUTATION {
 		$this->VERTICES=permuted_rows($this->VertexPerm->VERTICES, $this->VertexPerm->PERMUTATION);
 	}
@@ -68,9 +68,13 @@ object Polytope {
 	# Pseudovertices are the vertices of the type decomposition of the tropical torus induced by [[POINTS]].
 	# They are projections of the vertices of [[ENVELOPE]]. Note that each pseudovertex is given in tropical
 	# homogeneous coordinates with a leading 1 or 0, depending on whether it is a vertex or a ray.
-	property PSEUDOVERTICES : Matrix<Scalar> { 		
-		sub canonical { &canonicalize_vertices_to_leading_zero; } 
+	property PSEUDOVERTICES : Matrix<Scalar> {
+		sub canonical { &canonicalize_vertices_to_leading_zero; }
 	}
+
+        # @category Geometry
+	# Subset of the [[PSEUDOVERTICES]] which are not contained in the tropical projective torus.
+	property FAR_PSEUDOVERTICES : Set;
 
 	# @category Combinatorics
 	# These are the maximal cells of the covector decomposition of the tropical torus with
@@ -82,7 +86,7 @@ object Polytope {
 	# This is the face lattice of the polyhedral complex, whose vertices are [[PSEUDOVERTICES]] and
 	# whose cells are the cells of the covector decomposition. For each face in this lattice, we save the following information:
 	# 1) What PSEUDOVERTICES make up this face, i.e. a Set<int>
-	# 2) What is the covector of this face, i.e. an IncidenceMatrix (whose rows correspond to coordinates and 
+	# 2) What is the covector of this face, i.e. an IncidenceMatrix (whose rows correspond to coordinates and
 	# whose columns to [[POINTS]]).
 	# NOTE: This lattice does not contain any far faces of the polyhedral cells, as they do not have well-defined covectors.
 	property TORUS_COVECTOR_DECOMPOSITION : CovectorLattice;
@@ -112,7 +116,7 @@ object Polytope {
 	# Unique names assigned to the [[VERTICES]].
 	# If specified, they are shown by visualization tools instead of vertex indices.
 	#property VERTEX_LABELS : Array<String>;
-	
+
 	# @category Visualization
 	# Unique names assigned to the [[PSEUDOVERTICES]].
 	# Can be used as "NodeLabels" in [[VISUAL_PLANAR]].
@@ -125,9 +129,9 @@ object Polytope {
 
 	# @category Geometry
 	# This is the dome of the tropical hyperplane arrangement defined by the [[POINTS]].
-	# I.e. we take as function the (tropical) product of the tropical linear polynomials defined 
+	# I.e. we take as function the (tropical) product of the tropical linear polynomials defined
 	# in the following manner: For each point (p_0,...,p_d) we get the linear polynomial
-	# sum_{i=1}^d (1/p_i) * x_i, where sum is the DUAL tropical addition and * and /  is regular 
+	# sum_{i=1}^d (1/p_i) * x_i, where sum is the DUAL tropical addition and * and /  is regular
 	# addition and subtraction, respectively.
 	property DOME : polytope::Polytope<Scalar>;
 
@@ -138,11 +142,11 @@ object Polytope {
 	# in the i-th sector of all points indexed by S.
 	# For bounded vertices, the type is computed as usual. For unbounded rays (i.e. starting with a 0), the type
 	# is computed as follows. Let g be a generator, with infinite entries at positions J and let the ray be
-	# e_J = sum_{j in J} +- e_j (the sign being the orientation of the addition). 
+	# e_J = sum_{j in J} +- e_j (the sign being the orientation of the addition).
 	# If J is contained in K, the ray is "contained" in all sectors of g.
 	# Otherwise, the ray is "contained" in the sectors indexed by g.
 	# NOTE: The latter is an artificial definition in the sense that it is not compatible with intersecting
-	# faces of the covector lattice. However, it is correct in the sense that faces spanned by a 
+	# faces of the covector lattice. However, it is correct in the sense that faces spanned by a
 	# list of pseudovertices have as covector the intersection of the respective covectors.
 	property PSEUDOVERTEX_COVECTORS : Array<IncidenceMatrix>;
 
@@ -151,7 +155,7 @@ object Polytope {
 	# Each row corresponds to a row of [[PSEUDOVERTICES]] and encodes at position i, how many [[POINTS]]
 	# contain that pseudovertex in the i-th sector.
 	property PSEUDOVERTEX_COARSE_COVECTORS : Matrix<Int>;
-	
+
 	#FIXME: Properties for exterior description?
 
 	# @category Geometry 
@@ -160,7 +164,7 @@ object Polytope {
 	# number of (tropical homogeneous) coordinates of the polytope. A point p lies in the polytope described by these
 	# halfspaces, if and only M*p ~ M'*p, where ~ is >= for max and <= for min and all operations
 	# are tropical. In other words, p lies in the polytope, if and only if (M + M')*p = M*p.
-	#property HALF_SPACES : Pair< Matrix<TropicalNumber<Addition,Scalar> >, Matrix<TropicalNumber<Addition,Scalar> > >;
+	#property HALF_SPACES : Pair<Matrix<TropicalNumber<Addition,Scalar>>, Matrix<TropicalNumber<Addition,Scalar>>>;
 
 	# @category Geometry
 	# This returns the subdivision of the tropical torus induced by [[POINTS]] as a
@@ -168,8 +172,10 @@ object Polytope {
 	# @param Int chart Which coordinate to normalize to 0. This is 0 by default.
 	# @return fan::PolyhedralComplex
 	user_method torus_subdivision_as_complex(;$=0) {
-		my ($cone,$chart) = @_;
-		return (new Cycle<Addition>(VERTICES=>$cone->PSEUDOVERTICES, MAXIMAL_POLYTOPES=>$cone->MAXIMAL_COVECTOR_CELLS))->affine_chart($chart);
+            my ($cone,$chart) = @_;
+            return new fan::PolyhedralComplex(VERTICES=>tdehomog($cone->PSEUDOVERTICES,$chart),
+                                              MAXIMAL_POLYTOPES=>$cone->MAXIMAL_COVECTOR_CELLS,
+                                              LINEALITY_SPACE=>[]);
 	}
 
 	# @category Geometry
@@ -178,11 +184,13 @@ object Polytope {
 	# @param Int chart Which coordinate to normalize to 0. This is 0 by default.
 	# @return fan::PolyhedralComplex
 	user_method polytope_subdivision_as_complex(;$=0) {
-		my ($cone,$chart) = @_;
-		my $cov = $cone->POLYTOPE_COVECTOR_DECOMPOSITION;
-		my $used_pvertices = $cov->FACES->[$cov->top_node()];
-		return (new Cycle<Addition>(VERTICES=>$cone->PSEUDOVERTICES->minor($used_pvertices,All), 
-											 MAXIMAL_POLYTOPES=>$cone->POLYTOPE_MAXIMAL_COVECTOR_CELLS->minor(All,$used_pvertices)))->affine_chart($chart);	
+            my ($cone,$chart) = @_;
+            my $n = $cone->PSEUDOVERTICES->rows();
+            my $finite_indices = sequence(0,$n) - $cone->FAR_PSEUDOVERTICES;
+            my $finite_pseudovertices = new Matrix($cone->PSEUDOVERTICES->minor($finite_indices,All));
+            return new fan::PolyhedralComplex(VERTICES=>tdehomog($finite_pseudovertices,$chart),
+                                              MAXIMAL_POLYTOPES=>$cone->POLYTOPE_MAXIMAL_COVECTOR_CELLS,
+                                              LINEALITY_SPACE=>[]);
 	}
 
 
@@ -205,12 +213,12 @@ user_function dual_addition_version<Addition,Scalar>(Polytope<Addition,Scalar>;$
 # coordinates (e.g. the [[PSEUDOVERTICES]] of a tropical [[Polytope]]).
 # It returns the set of row indices of the second matrix such that the corresponding row 
 # starts with a 1 and the remaining vector occurs in the first matrix.
-# @param Matrix<TropicalNumber<Addition, Scalar>> points 
+# @param Matrix<TropicalNumber<Addition, Scalar>> points
 # @param Matrix<Scalar> pseudovertices
 # @return Set<Int>
 user_function points_in_pseudovertices<Addition,Scalar>(Matrix<TropicalNumber<Addition, Scalar>>, Matrix<Scalar>) {
   my ($points, $pseudovertices)=@_;
-  $points = (ones_vector<Scalar>($points->rows())) | (new Matrix<Scalar>($points));
+  $points = ones_vector<Scalar>($points->rows()) | new Matrix<Scalar>($points);
   my $generators=new HashSet<Vector<Scalar>>(rows($points));
 
   my $result = new Set<Int>();
@@ -218,4 +226,11 @@ user_function points_in_pseudovertices<Addition,Scalar>(Matrix<TropicalNumber<Ad
     if (exists $generators->{$pseudovertices->row($i)}) { $result += $i; }
   }
   return $result;
-} 
+}
+
+
+# Local Variables:
+# mode: perl
+# cperl-indent-level: 3
+# indent-tabs-mode:nil
+# End:

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -83,10 +83,10 @@ using restriction_const = std::integral_constant<restriction_kind, k>;
 typedef restriction_const<only_rows> rowwise;
 typedef restriction_const<only_cols> columnwise;
 
-template <typename TMatrix> inline
+template <typename TMatrix>
 decltype(auto) lines(TMatrix& m, rowwise) { return pm::rows(m); }
 
-template <typename TMatrix> inline
+template <typename TMatrix>
 decltype(auto) lines(TMatrix& m, columnwise) { return pm::cols(m); }
 
 template <typename E, bool symmetric=false, restriction_kind restriction=full> class Table;
@@ -94,19 +94,32 @@ template <typename Base, bool symmetric, restriction_kind restriction=full> clas
 template <typename, typename, bool> struct asym_permute_entries;
 template <typename Traits> struct sym_permute_entries;
 
-template <typename E, bool _row_oriented, bool _symmetric>
+template <typename E, bool is_row_oriented, bool is_symmetric>
 class it_traits {
 protected:
    int line_index;
 public:
-   static const bool row_oriented=_row_oriented, symmetric=_symmetric;
-   typedef cell<E> Node;
-   typedef it_traits<E,(!symmetric && !row_oriented),symmetric> cross_traits;
+   static const bool row_oriented=is_row_oriented, symmetric=is_symmetric;
+   using Node = cell<E>;
+   using cross_traits = it_traits<E,(!symmetric && !row_oriented),symmetric>;
 
-   AVL::Ptr<Node>& link(Node *n, AVL::link_index X) const
+   AVL::Ptr<Node>& link(Node* n, AVL::link_index X) const
    {
       const int in_row= symmetric ? n->key > 2*line_index : row_oriented;
       return n->links[X-AVL::L + in_row*3];
+   }
+
+   void prepare_move_between_trees(Node* n, const int old_line_index, const int new_line_index) const
+   {
+      if (is_symmetric) {
+         const int cross_index = n->key - old_line_index;
+         if ((cross_index > old_line_index) != (cross_index > new_line_index)) {
+            // element has leaped over the diagonal
+            for (int i=0; i<3; ++i)
+               std::swap(n->links[i], n->links[i+3]);
+         }
+      }
+      n->key += new_line_index - old_line_index;
    }
 
    it_traits(int index_arg=0) : line_index(index_arg) {}
@@ -115,21 +128,21 @@ public:
    const it_traits& get_it_traits() const { return *this; }
 };
 
-template <typename E, bool _row_oriented, bool _symmetric, restriction_kind restriction=full>
-class traits_base : public it_traits<E, _row_oriented, _symmetric> {
+template <typename E, bool is_row_oriented, bool is_symmetric, restriction_kind restriction=full>
+class traits_base : public it_traits<E, is_row_oriented, is_symmetric> {
 public:
-   typedef it_traits<E,_row_oriented,_symmetric> traits_for_iterator;
+   typedef it_traits<E, is_row_oriented, is_symmetric> traits_for_iterator;
    typedef typename traits_for_iterator::Node Node;
 protected:
    mutable AVL::Ptr<Node> root_links[3];
 
 public:
    static const bool
-      symmetric=_symmetric,
-      row_oriented=_row_oriented,
+      symmetric=is_symmetric,
+      row_oriented=is_row_oriented,
       allow_multiple=false,
       cross_oriented= restriction!=only_rows && restriction!=only_cols ? !symmetric && !row_oriented : row_oriented,
-      fixed_dim= _symmetric || restriction==(_row_oriented ? only_cols : only_rows);
+      fixed_dim= is_symmetric || restriction==(is_row_oriented ? only_cols : only_rows);
 
    typedef E mapped_type;
    typedef AVL::tree< traits<traits_base, symmetric, restriction> > own_tree;
@@ -285,8 +298,10 @@ protected:
    }
 
 public:
-   traits() {}
-   traits(typename Base::arg_type init_arg) : Base(init_arg) {}
+   template <typename... Args,
+             typename=std::enable_if_t<std::is_constructible<Base, Args...>::value>>
+   explicit traits(Args&&... init_args)
+      : Base(std::forward<Args>(init_args)...) {}
 
    void destroy_node(Node* n)
    {
@@ -316,9 +331,12 @@ public:
 };
 
 template <typename Base, restriction_kind restriction>
-class traits<Base, true, restriction> : public traits<Base, false, restriction> {
+class traits<Base, true, restriction>
+   : public traits<Base, false, restriction> {
+   using base_t = traits<Base, false, restriction>;
 public:
-   typedef typename traits<Base,false,restriction>::Node Node;
+   using typename base_t::Node;
+
 protected:
    Node* insert_node(Node *n, int i)
    {
@@ -362,8 +380,10 @@ protected:
       return restriction==full || n->key >= 2*this->get_line_index();
    }
 public:
-   traits() {}
-   traits(typename Base::arg_type init_arg) : traits<Base,false,restriction>(init_arg) {}
+   template <typename... Args,
+             typename=std::enable_if_t<std::is_constructible<base_t, Args...>::value>>
+   explicit traits(Args&&... init_args)
+      : base_t(std::forward<Args>(init_args)...) {}
 
    void destroy_node(Node* n)
    {
@@ -408,13 +428,13 @@ struct asym_permute_entries {
    void operator()(row_ruler*, row_ruler* R) const
    {
       if (!restricted) {
-         for (typename Entire<col_ruler>::iterator ci=entire(*C);  !ci.at_end();  ++ci)
+         for (auto ci=entire(*C);  !ci.at_end();  ++ci)
             ci->init();
          R->prefix()=C;
          C->prefix()=R;
       }
       int r=0;
-      for (typename Entire<row_ruler>::iterator ri=entire(*R); !ri.at_end();  ++ri, ++r) {
+      for (auto ri=entire(*R); !ri.at_end();  ++ri, ++r) {
          const int old_r=ri->line_index, rdiff=r-old_r;
          ri->line_index=r;
          for (typename tree_type::iterator e=ri->begin(); !e.at_end(); ++e) {
@@ -436,7 +456,7 @@ struct cross_direction_helper< AVL::tree_iterator<Traits,Dir> > {
    typedef AVL::tree_iterator<typename inherit_const<typename Traits::cross_traits, Traits>::type, Dir> iterator;
 };
 
-template <typename Iterator> inline
+template <typename Iterator>
 unary_transform_iterator<typename cross_direction_helper<Iterator>::iterator,
                          pair< BuildUnary<cell_accessor>, BuildUnaryIt<cell_index_accessor> > >
 cross_direction(const unary_transform_iterator<Iterator, pair< BuildUnary<cell_accessor>, BuildUnaryIt<cell_index_accessor> > >& it)
@@ -829,14 +849,14 @@ struct sym_permute_entries
       // as the iterators always need correct values there
       const int n=R->size();
       std::vector<int> perm(n);
-      inv_perm.resize(n, -1);
+      inv_perm_store.resize(n, -1);
 
       int r=0;
       for (entry_t& entry : *R) {
          if (this->is_alive(entry)) {
             tree_t& t=this->tree(entry);
             perm[r]=t.line_index;
-            inv_perm[t.line_index]=r;
+            inv_perm_store[t.line_index]=r;
             t.line_index=r;
          } else {
             this->handle_dead_entry(entry, r);
@@ -851,7 +871,7 @@ struct sym_permute_entries
             for (auto e=Traits::tree((*Rold)[old_r]).begin(); !e.at_end(); ) {
                Node* node=e.operator->();  ++e;
                const int old_c=node->key-old_r;
-               const int c=inv_perm[old_c];
+               const int c=inv_perm_store[old_c];
                if (old_r!=old_c) Traits::tree((*Rold)[old_c]).unlink_node(node);
                node->key=r+c;
                Traits::tree((*R)[std::max(r,c)]).push_back_node(node);
@@ -890,7 +910,7 @@ struct sym_permute_entries
       this->finalize_dead_entries();
    }
 
-   std::vector<int> inv_perm;
+   std::vector<int> inv_perm_store;
 };
 
 template <typename E, restriction_kind restriction>
@@ -1176,13 +1196,13 @@ public:
    }
 };
 
-template <typename Line> inline
+template <typename Line>
 lower_triangle_line<Line>& select_lower_triangle(Line& l)
 {
    return reinterpret_cast<lower_triangle_line<Line>&>(l);
 }
 
-template <typename Line> inline
+template <typename Line>
 const lower_triangle_line<Line>& select_lower_triangle(const Line& l)
 {
    return reinterpret_cast<const lower_triangle_line<Line>&>(l);
@@ -1206,7 +1226,7 @@ struct check_container_feature<sparse2d::line<TreeRef>, pure_sparse> : std::true
 } // end namespace pm
 
 namespace std {
-   template <typename E, bool symmetric, pm::sparse2d::restriction_kind restriction> inline
+   template <typename E, bool symmetric, pm::sparse2d::restriction_kind restriction>
    void swap(pm::sparse2d::Table<E,symmetric,restriction>& t1, pm::sparse2d::Table<E,symmetric,restriction>& t2)
    { t1.swap(t2); }
 } // end namespace std

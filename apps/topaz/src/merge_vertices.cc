@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -28,15 +28,13 @@ hash_map<int,int> merge_vertices(Array<std::string>& L1, const Array<std::string
    hash_map<std::string,int> map(n_vert1);
    int count = 0;
     
-   for (Entire< Array<std::string> >::const_iterator l=entire(L1);
-        !l.at_end(); ++l, ++count)
+   for (auto l=entire(L1); !l.at_end(); ++l, ++count)
       map[*l] = count;
     
    L1.resize(n_vert1 + n_vert2);
    int diff = n_vert1;
    count = 0;
-   for (Entire< Array<std::string> >::const_iterator l=entire(L2);
-        !l.at_end(); ++l, ++count)
+   for (auto l=entire(L2); !l.at_end(); ++l, ++count)
       if (map.find(*l) != map.end()) {         // label equal to *l found in L1
          M[count] = map[*l];
          --diff;

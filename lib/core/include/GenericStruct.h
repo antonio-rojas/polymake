@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -138,34 +138,6 @@ template <typename Struct> inline
 bool operator!= (const GenericStruct<Struct>& a, const GenericStruct<Struct>& b)
 {
    return !(a==b);
-}
-
-template <typename TStruct> inline
-typename std::enable_if<operations::build_comparator<TStruct, TStruct, operations::cmp>::type::ordered, bool>::type
-operator< (const GenericStruct<TStruct>& a, const GenericStruct<TStruct>& b)
-{
-   return operations::lt<const TStruct&, const TStruct&>()(a.top(), b.top());
-}
-
-template <typename TStruct> inline
-typename std::enable_if<operations::build_comparator<TStruct, TStruct, operations::cmp>::type::ordered, bool>::type
-operator> (const GenericStruct<TStruct>& a, const GenericStruct<TStruct>& b)
-{
-   return b<a;
-}
-
-template <typename TStruct> inline
-typename std::enable_if<operations::build_comparator<TStruct, TStruct, operations::cmp>::type::ordered, bool>::type
-operator<= (const GenericStruct<TStruct>& a, const GenericStruct<TStruct>& b)
-{
-   return !(b<a);
-}
-
-template <typename TStruct> inline
-typename std::enable_if<operations::build_comparator<TStruct, TStruct, operations::cmp>::type::ordered, bool>::type
-operator>= (const GenericStruct<TStruct>& a, const GenericStruct<TStruct>& b)
-{
-   return !(a<b);
 }
 
 }

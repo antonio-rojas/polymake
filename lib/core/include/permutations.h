@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -23,6 +23,7 @@
 #include "polymake/Set.h"
 #include "polymake/Array.h"
 #include "polymake/Bitset.h"
+#include "polymake/hash_map"
 #include "polymake/vector"
 #include "polymake/list"
 #include <algorithm>
@@ -57,7 +58,7 @@ template <typename Permutation>
 int n_fixed_points(const Permutation& p)
 {
    int i(0), n(0);
-   for (typename Entire<Permutation>::const_iterator pit = entire(p); !pit.at_end(); ++pit, ++i)
+   for (auto pit = entire(p); !pit.at_end(); ++pit, ++i)
       if (*pit == i)
          ++n;
    return n;
@@ -68,7 +69,7 @@ void inverse_permutation(const Permutation& perm, InvPermutation& inv_perm)
 {
    inv_perm.resize(perm.size());
    int pos=0;
-   for (typename Entire<Permutation>::const_iterator i=entire(perm);  !i.at_end();  ++i, ++pos)
+   for (auto i=entire(perm);  !i.at_end();  ++i, ++pos)
       inv_perm[*i]=pos;
 }
 
@@ -153,7 +154,7 @@ public:
    int size() const { return count_it(begin()); }
 };
 
-template <typename Permutation> inline
+template <typename Permutation>
 const PermutationCycles<Permutation>& permutation_cycles(const Permutation& p)
 {
    return reinterpret_cast<const PermutationCycles<Permutation>&>(p);
@@ -170,18 +171,42 @@ struct spec_object_traits< PermutationCycles<Permutation> >
    static const IO_separator_kind IO_separator=IO_sep_inherit;
 };
 
-template <typename Input1, typename Input2, typename Output, typename Comparator>
-void find_permutation(Input1 src1, Input2 src2, Output dst, const Comparator& comparator)
+template <typename Value, typename Comparator, typename ExpectDuplicates, typename enabled=void>
+struct permutation_map {
+   using type = Map<Value, int, ComparatorTag<Comparator>, MultiTag<ExpectDuplicates>>;
+};
+
+template <typename Value>
+struct permutation_map<Value, operations::cmp, std::false_type, typename std::enable_if<!std::numeric_limits<Value>::is_specialized && is_ordered<Value>::value>::type> {
+   using type = Map<Value, int>;
+};
+
+template <typename Value>
+struct permutation_map<Value, operations::cmp, std::false_type, typename std::enable_if<std::numeric_limits<Value>::is_specialized>::type> {
+   using type = hash_map<Value, int>;
+};
+
+template <typename Value>
+struct permutation_map<Value, operations::cmp, std::true_type, typename std::enable_if<!std::numeric_limits<Value>::is_specialized && is_ordered<Value>::value>::type> {
+   using type = Map<Value, int, MultiTag<std::true_type>>;
+};
+
+template <typename Value>
+struct permutation_map<Value, operations::cmp, std::true_type, typename std::enable_if<std::numeric_limits<Value>::is_specialized>::type> {
+   using type = hash_map<Value, int, MultiTag<std::true_type>>;
+};
+
+template <typename Input1, typename Input2, typename Output, typename Comparator, typename ExpectDuplicates>
+void find_permutation_impl(Input1&& src1, Input2&& src2, Output&& dst, const Comparator& comparator, ExpectDuplicates)
 {
-   typedef Map<typename iterator_traits<Input1>::value_type, int, Comparator> map_type;
-   map_type index_map(comparator);
+   typename permutation_map<typename iterator_traits<Input1>::value_type, Comparator, ExpectDuplicates>::type index_map;
 
    for (int i=0; !src1.at_end(); ++src1, ++i)
-      index_map[*src1]=i;
+      index_map.emplace(*src1, i);
 
    for (; !src2.at_end(); ++src2, ++dst) {
-      typename map_type::iterator where=index_map.find(*src2);
-      if (where.at_end()) {
+      const auto where=index_map.find(*src2);
+      if (where == index_map.end()) {
          std::string reason;
          if (index_map.empty()) {
             reason="not a permutation: first sequence is shorter";
@@ -200,40 +225,43 @@ void find_permutation(Input1 src1, Input2 src2, Output dst, const Comparator& co
       throw no_match("not a permutation: second sequence is shorter");
 }
 
-template <typename Container1, typename Container2, typename Comparator> inline
-Array<int> find_permutation(const Container1& c1, const Container2& c2, const Comparator& comparator)
+template <typename Container1, typename Container2, typename Comparator=polymake::operations::cmp>
+Array<int> find_permutation(const Container1& c1, const Container2& c2, const Comparator& comparator=Comparator())
 {
    Array<int> perm(c1.size());
-   find_permutation(entire(c1), entire(c2), perm.begin(), comparator);
+   find_permutation_impl(entire(c1), entire(c2), perm.begin(), comparator, std::false_type());
    return perm;
 }
 
-template <typename Container1, typename Container2> inline
-Array<int> find_permutation(const Container1& c1, const Container2& c2)
-{
-   return find_permutation(c1,c2,polymake::operations::cmp());
-}
-
-template <typename Container1, typename Container2, typename Comparator> inline
-bool are_permuted(const Container1& c1, const Container2& c2, const Comparator& comparator)
+template <typename Container1, typename Container2, typename Comparator=polymake::operations::cmp>
+Array<int> find_permutation_with_duplicates(const Container1& c1, const Container2& c2, const Comparator& comparator=Comparator())
 {
    Array<int> perm(c1.size());
+   find_permutation_impl(entire(c1), entire(c2), perm.begin(), comparator, std::true_type());
+   return perm;
+}
+
+template <typename Container1, typename Container2, typename Comparator=polymake::operations::cmp>
+bool are_permuted(const Container1& c1, const Container2& c2, const Comparator& comparator=Comparator())
+{
    try {
-      find_permutation(entire(c1), entire(c2), perm.begin(), comparator);
+      find_permutation(c1, c2, comparator);
       return true;
-   } catch (no_match) {
-      return false;
-   }
+   } catch (const no_match&) {}
    return false;
 }
 
-template <typename Container1, typename Container2> inline
-bool are_permuted(const Container1& c1, const Container2& c2)
+template <typename Container1, typename Container2, typename Comparator=polymake::operations::cmp>
+bool are_permuted_with_duplicates(const Container1& c1, const Container2& c2, const Comparator& comparator=Comparator())
 {
-   return are_permuted(c1,c2,polymake::operations::cmp());
+   try {
+      find_permutation_with_duplicates(c1, c2, comparator);
+      return true;
+   } catch (const no_match&) {}
+   return false;
 }
 
-template <typename Container, typename Permutation> inline
+template <typename Container, typename Permutation>
 typename std::enable_if<std::is_same<typename object_traits<Container>::generic_tag, is_container>::value,
                         typename object_traits<Container>::persistent_type>::type
 permuted(const Container& c, const Permutation& perm)
@@ -247,7 +275,7 @@ permuted(const Container& c, const Permutation& perm)
    return result;
 }
 
-template <typename Container, typename Permutation> inline
+template <typename Container, typename Permutation>
 typename std::enable_if<std::is_same<typename object_traits<Container>::generic_tag, is_container>::value,
                         typename object_traits<Container>::persistent_type>::type
 permuted_inv(const Container& c, const Permutation& perm)
@@ -542,19 +570,21 @@ AllPermutations<kind> all_permutations(int n)
 
 template <typename PermutationRef, typename Element=int>
 class PermutationMatrix
-   : public GenericMatrix< PermutationMatrix<PermutationRef,Element>, Element > {
+   : public GenericMatrix< PermutationMatrix<PermutationRef, Element>, Element > {
 protected:
-   alias<PermutationRef> perm;
+   using alias_t = alias<PermutationRef>;
+   alias_t perm;
    mutable std::vector<int> inv_perm;
 public:
-   typedef Element value_type;
-   typedef const Element& reference;
-   typedef reference const_reference;
+   using value_type = Element;
+   using reference = const Element&;
+   using const_reference = reference;
 
-   typedef typename alias<PermutationRef>::arg_type arg_type;
-   PermutationMatrix(arg_type perm_arg) : perm(perm_arg) {}
+   template <typename Arg, typename=std::enable_if_t<std::is_constructible<alias_t, Arg>::value>>
+   explicit PermutationMatrix(Arg&& perm_arg)
+      : perm(std::forward<Arg>(perm_arg)) {}
 
-   typename alias<PermutationRef>::const_reference get_perm() const { return *perm; }
+   decltype(auto) get_perm() const { return *perm; }
 
    const std::vector<int>& get_inv_perm() const
    {
@@ -587,21 +617,21 @@ public:
 template <typename PermutationRef, typename Element>
 class Rows< PermutationMatrix<PermutationRef, Element> >
    : public modified_container_pair_impl< Rows< PermutationMatrix<PermutationRef, Element> >,
-                                          mlist< Container1Tag< PermutationRef >,
-                                                 Container2Tag< constant_value_container<const Element&> >,
+                                          mlist< Container1RefTag< PermutationRef >,
+                                                 Container2RefTag< same_value_container<const Element&> >,
                                                  OperationTag< SameElementSparseVector_factory<2> >,
                                                  MasqueradedTop > > {
    typedef modified_container_pair_impl<Rows> base_t;
 protected:
    ~Rows();
 public:
-   const typename base_t::container1& get_container1() const
+   decltype(auto) get_container1() const
    {
       return this->hidden().get_perm();
    }
-   typename base_t::container2 get_container2() const
+   auto get_container2() const
    {
-      return one_value<Element>();
+      return same_value_container<const Element&>(one_value<Element>());
    }
    typename base_t::operation get_operation() const
    {
@@ -613,20 +643,20 @@ template <typename PermutationRef, typename Element>
 class Cols< PermutationMatrix<PermutationRef, Element> >
    : public modified_container_pair_impl< Cols< PermutationMatrix<PermutationRef, Element> >,
                                           mlist< Container1Tag< std::vector<int> >,
-                                                 Container2Tag< constant_value_container<const Element&> >,
+                                                 Container2RefTag< same_value_container<const Element&> >,
                                                  OperationTag< SameElementSparseVector_factory<2> >,
                                                  MasqueradedTop > > {
    typedef modified_container_pair_impl<Cols> base_t;
 protected:
    ~Cols();
 public:
-   const typename base_t::container1& get_container1() const
+   decltype(auto) get_container1() const
    {
       return this->hidden().get_inv_perm();
    }
-   typename base_t::container2 get_container2() const
+   auto get_container2() const
    {
-      return one_value<Element>();
+      return same_value_container<const Element&>(one_value<Element>());
    }
    typename base_t::operation get_operation() const
    {
@@ -634,50 +664,74 @@ public:
    }
 };
 
-template <typename Element, typename Permutation> inline
-PermutationMatrix<const Permutation&, Element>
-permutation_matrix(const Permutation& perm)
+template <typename Element, typename Permutation>
+auto permutation_matrix(Permutation&& perm)
 {
-   return perm;
+   return PermutationMatrix<Permutation, Element>(std::forward<Permutation>(perm));
 }
 
-template<typename Permutation> inline
-bool is_permutation(const Permutation& perm){
+template <typename Permutation>
+bool is_permutation(const Permutation& perm)
+{
    // check that perm really is a permutation
    Set<typename Permutation::value_type> values;
    
-   for (typename Entire<Permutation>::const_iterator i=entire(perm);  !i.at_end();  ++i){
-      if(*i >= perm.size() or *i < 0){
-         return 0;
-      }
+   for (auto i=entire(perm); !i.at_end(); ++i) {
+      if (*i >= perm.size() or *i < 0)
+         return false;
       values.insert(*i);
    }
-   if(values.size() != perm.size() ){
-      return 0;
-   }
-   return 1;
+   return values.size() == perm.size();
 }
 
 template <typename Scalar>
-Array<Array<int> > rows_induced_from_cols(const Matrix<Scalar>& M, const Array<Array<int> > G)
+Array<Array<int>> rows_induced_from_cols(const Matrix<Scalar>& M, const Array<Array<int>> G)
 {
    Map<Vector<Scalar>,int> RevPerm;
    int index = 0;
-   for (typename Entire<Rows<Matrix<Scalar > > >::const_iterator v = entire(rows(M)); !v.at_end(); ++v, ++index){
+   for (auto v = entire(rows(M)); !v.at_end(); ++v, ++index){
       RevPerm[*v] = index;
    }
-   Array<Array<int> > RowPerm(G.size());
-   Entire<Array<Array<int > > >::const_iterator old_perm = entire(G);
+   Array<Array<int>> RowPerm(G.size());
+   auto old_perm = entire(G);
        
-       
-   for (Entire<Array<Array<int > > >::iterator new_perm = entire(RowPerm); !new_perm.at_end(); ++new_perm, ++old_perm){
+   for (auto new_perm = entire(RowPerm); !new_perm.at_end(); ++new_perm, ++old_perm){
       new_perm->resize(M.rows());
-      Entire<Array<int > >::iterator new_perm_entry = entire(*new_perm);
-      for (typename Entire<Rows<Matrix<Scalar > > >::const_iterator v = entire(rows(M)); !v.at_end(); ++v, ++new_perm_entry){
+      auto new_perm_entry = entire(*new_perm);
+      for (auto v = entire(rows(M)); !v.at_end(); ++v, ++new_perm_entry){
          *new_perm_entry = RevPerm[permuted(*v,*old_perm)];
       }
    }
    return RowPerm;
+}
+
+template<typename Permutation, typename SubdomainType>
+Array<Permutation>
+permutation_subgroup_generators(const Array<Permutation>& gens,
+                                const SubdomainType& subdomain)
+{
+   Map<int, int> index_of;
+   int index(0);
+   for (const auto& s: subdomain)
+      index_of[s] = index++;
+   
+   Set<Array<int>> subgens;
+   const Array<int> id(sequence(0, subdomain.size()));
+   
+   for (const auto& g: gens) {
+      Array<int> candidate_gen(subdomain.size());
+      bool candidate_ok(true);
+      for (const auto& i: subdomain) {
+         if (!index_of.exists(g[i])) {
+            candidate_ok = false;
+            break;
+         }
+         candidate_gen[index_of[i]] = index_of[g[i]];
+      }
+      if (candidate_ok && candidate_gen != id)
+         subgens += candidate_gen;
+   }
+   return Array<Permutation>(subgens.size(), subgens.begin());
 }
 
 } // end namespace pm
@@ -697,6 +751,7 @@ namespace polymake {
    using pm::all_permutations;
    using pm::PermutationMatrix;
    using pm::permutation_matrix;
+   using pm::permutation_subgroup_generators;
 }
 
 #endif // POLYMAKE_PERMUTATIONS_H

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -32,7 +32,7 @@ perl::Object conv(const Array<perl::Object>& pp_in)
    ListMatrix< Vector<Scalar> > Points=p_in->give("VERTICES | POINTS");
    ListMatrix< Vector<Scalar> > LinSpace=p_in->give("LINEALITY_SPACE");
 
-   perl::Object p_out(perl::ObjectType::construct<Scalar>("Polytope"));
+   perl::Object p_out("Polytope", mlist<Scalar>());
    std::string descr_names=p_in->name();
 
    while (! (++p_in).at_end()) {
@@ -60,7 +60,16 @@ UserFunctionTemplate4perl("# @category Producing a polytope from polytopes"
                           "# Construct a new polyhedron as the convex hull of the polyhedra"
                           "# given in //P_Array//."
                           "# @param Array<Polytope> P_Array"
-                          "# @return PropagatedPolytope",
+                          "# @return PropagatedPolytope"
+                          "# @example"
+                          "# > $p = conv([cube(2,1,0),cube(2,6,5)]);"
+                          "# > print $p->VERTICES;"
+                          "# | 1 0 0"
+                          "# | 1 1 0"
+                          "# | 1 0 1"
+                          "# | 1 6 5"
+                          "# | 1 5 6"
+                          "# | 1 6 6",
                           "conv<Scalar>(Polytope<type_upgrade<Scalar>> +)");
 } }
 

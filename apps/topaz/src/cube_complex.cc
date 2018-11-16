@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -115,19 +115,25 @@ perl::Object cube_complex(Array<int> x_param)
   p.take("FACETS") << Pile;
   p.take("DIM") << dim;
   p.take("COORDINATES") << Coordinates;
-  p.take("MANIFOLD") << 1;
-  p.take("ORIENTED_PSEUDO_MANIFOLD") << 1;
-  p.take("BALL") << 1;
+  p.take("MANIFOLD") << true;
+  p.take("ORIENTED_PSEUDO_MANIFOLD") << true;
+  p.take("BALL") << true;
   return p;
 }
 
 UserFunction4perl("# @category Producing from scratch\n"
-                  "# Produces a triangulated pile of hypercubes: Each cube is split into d!\n"
-                  "# tetrahedra, and the tetrahedra are all grouped around one of the\n"
-                  "# diagonal axes of the cube.\n"
-                  "# DOC_FIXME"
-                  "# args: x_1, ... , x_d",
-                  &cube_complex,"cube_complex(@)");
+                  "# Produces a triangulated pile of hypercubes, arranged in a d-dimensional array."
+                  "# Each cube is split into d! tetrahedra, and the tetrahedra are all grouped around"
+                  "# one of the diagonal axes of the cube.\n"
+                  "# @param Array<Int> x specifies the shape of the pile:"
+                  "# d=x.size is the dimension of the cubes to be stacked, and the stack will be"
+                  "# x_1 by x_2 by ... by x_d cubes."
+                  "# @return GeometricSimplicialComplex<Rational>"
+                  "# @example Arrange four triangulated 3-cubes to form a big 2 by 2 cube:"
+                  "# > $cc = cube_complex([2,2,2]);"
+                  "# > print $cc->description;"
+                  "# | 2x2x2 Pile of 3-dimensional triangulated cubes.",
+                  &cube_complex, "cube_complex");
 
 } }
 

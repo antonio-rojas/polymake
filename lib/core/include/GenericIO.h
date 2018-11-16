@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -18,12 +18,11 @@
 #define POLYMAKE_GENERIC_IO_H
 
 #include "polymake/internal/sparse.h"
+#include "polymake/internal/shared_object.h"
 #include "polymake/internal/matrix_rows_cols.h"
 #include <typeinfo>
 
 namespace pm {
-
-template <typename Data, typename Input> struct make_list_reader;
 
 template <typename> class CheckEOF {};
 template <typename> class TrustedValue {};
@@ -67,13 +66,14 @@ struct structural_helper<T, Property, is_container>
 
 template <typename T, template <typename> class Property>
 struct structural_helper<T, Property, is_composite>
-   : list_accumulate_unary<list_and, Property, typename object_traits<T>::elements> {};
+   : list_accumulate_unary<list_and, Property, typename list_transform_unary<deref, typename object_traits<T>::elements>::type> {};
 
 template <typename T> struct is_parseable;
 template <typename T> struct is_printable;
 template <typename T> struct is_parseable_or_serializable;
-template <typename T> struct is_writeable;
 template <typename T> struct is_printable_or_serializable;
+template <typename T> struct is_readable;
+template <typename T> struct is_writeable;
 
 template <typename Top, typename Options, int subst_pos=0>
 class GenericIOoptions {
@@ -151,79 +151,76 @@ struct unknown_columns<T, false> : int_constant<-1> {};
 
 struct fallback {
    template <typename Any>
-   fallback(const Any&);
+   fallback(Any&&);
 };
 
 nothing& operator>> (const fallback&, const fallback&);
 nothing& operator<< (const fallback&, const fallback&);
 
-#define DeclHasIOoperatorCHECK(name,arrow)                        \
-template <typename Data, typename Stream, typename Result=Stream> \
-struct has_##name##_operator_impl {                               \
-   static Stream& stream();                                       \
-   static Data& data();                                           \
-   struct helper {                                                \
-      static derivation::yes Test(Result&);                       \
-      static derivation::no Test(nothing&);                       \
-   };                                                             \
-   static const bool value= sizeof(helper::Test( stream() arrow data() )) == sizeof(derivation::yes); \
+#define DeclHasIOoperatorCHECK(name, arrow)                       \
+template <typename Data, typename Stream, typename Result=Stream>    \
+struct has_##name##_operator_impl {                                  \
+   struct helper {                                                   \
+      static std::true_type Test(Result&);                           \
+      static std::false_type Test(nothing&);                         \
+   };                                                                   \
+   using type = decltype(helper::Test( std::declval<Stream&>() arrow std::declval<Data&>() )); \
 }
 
 DeclHasIOoperatorCHECK(input,>>);
 DeclHasIOoperatorCHECK(output,<<);
 
 template <typename Input, typename Data>
-struct has_generic_input_operator
-   : bool_constant< has_input_operator_impl<Data,GenericInput<Input>,Input>::value > {};
+using has_generic_input_operator
+   = typename has_input_operator_impl<Data, GenericInput<Input>, Input>::type;
 
 template <typename Output, typename Data>
-struct has_generic_output_operator
-   : bool_constant< has_output_operator_impl<Data,GenericOutput<Output>,Output>::value > {};
+using has_generic_output_operator
+   = typename has_output_operator_impl<Data, GenericOutput<Output>, Output>::type;
 
 template <typename Data>
-struct has_std_input_operator
-   : bool_constant< has_input_operator_impl<Data,std::istream>::value > {};
+using has_std_input_operator
+   = typename has_input_operator_impl<Data, std::istream>::type;
 
 template <typename Data>
-struct has_std_output_operator
-   : bool_constant< has_output_operator_impl<Data,std::ostream>::value > {};
+using has_std_output_operator
+   = typename has_output_operator_impl<Data, std::ostream>::type;
 
 template <typename Container>
 struct has_insert {
 // std::<something>::insert takes a const_iterator since C++11
-   typedef typename Container::const_iterator container_it;
+   using const_it = typename Container::const_iterator;
+   using value_type = typename Container::value_type;
 
    struct helper {
-      static derivation::yes Test(const typename Container::iterator&);
-      static derivation::yes Test(const std::pair<typename Container::iterator, bool>&); 
-      static derivation::no Test(nothing&);
+      static std::true_type Test(const typename Container::iterator&);
+      static std::true_type Test(const std::pair<typename Container::iterator, bool>&);
+      static std::false_type Test(nothing&);
    };
    struct mix_in : public Container {
       using Container::insert;
       nothing& insert(const fallback&);
-      nothing& insert(container_it, const fallback&);
+      nothing& insert(const_it, const fallback&);
    };
-   static container_it it();
-   static const typename Container::value_type& val();
 
-   static const bool without_position= sizeof(helper::Test(std::declval<mix_in&>().insert(val()) )) == sizeof(derivation::yes),
-                     with_position= sizeof(helper::Test(std::declval<mix_in&>().insert(it(),val()) )) == sizeof(derivation::yes);
+   using without_position = decltype(helper::Test(std::declval<mix_in&>().insert(std::declval<const value_type&>())));
+   using with_position= decltype(helper::Test(std::declval<mix_in&>().insert(std::declval<const_it>(), std::declval<const value_type&>())));
 };
 
 template <typename Apparent> struct as_list {};
 struct as_set {};
 struct by_inserting : as_set {};
-template <int _resizeable, bool _allow_sparse> struct as_array {};
-template <int _resizeable> struct as_sparse : as_array<_resizeable,true> {};
-template <int _resizeable> struct as_matrix {};
+template <int TResizeable, bool TAllowSparse> struct as_array {};
+template <int TResizeable> struct as_sparse : as_array<TResizeable, true> {};
+template <int TResizeable> struct as_matrix {};
 
 template <typename Data, bool trusted=true,
-          int _dim=object_traits<Data>::dimension>
+          int TDim=object_traits<Data>::dimension>
 struct input_mode;
 
 template <typename Data, bool trusted,
-          bool _ordered_items=(has_insert<Data>::with_position && trusted) || !has_insert<Data>::without_position,
-          bool _mutable=is_mutable<typename iterator_traits<typename Data::iterator>::reference>::value>
+          bool OrderedItems=(has_insert<Data>::with_position::value && trusted) || !has_insert<Data>::without_position::value,
+          bool Mutable=is_mutable<typename iterator_traits<typename Data::iterator>::reference>::value>
 struct input_list {
    // primary: ordered items, mutable
    typedef as_list<Data> type;
@@ -235,32 +232,33 @@ struct input_list<Data, trusted, true, false> {
    typedef as_set type;
 };
 
-template <typename Data, bool trusted, bool _mutable>
-struct input_list<Data, trusted, false, _mutable> {
+template <typename Data, bool trusted, bool TMutable>
+struct input_list<Data, trusted, false, TMutable> {
    // !ordered items || !trusted
    typedef by_inserting type;
 };
 
 template <typename Data, bool trusted,
-          bool _random=is_derived_from<typename container_traits<Data>::category, random_access_iterator_tag>::value,
-          bool _sparse=check_container_feature<Data, sparse>::value,
-          int _resizeable=object_traits<Data>::is_resizeable,
-          bool _mutable=is_mutable<typename iterator_traits<typename Data::iterator>::reference>::value>
+          bool TRandom=is_derived_from<typename container_traits<Data>::category, random_access_iterator_tag>::value,
+          bool TSparse=check_container_feature<Data, sparse>::value,
+          int TResizeable=object_traits<Data>::is_resizeable,
+          bool TMutable=is_mutable<typename iterator_traits<typename Data::iterator>::reference>::value>
 struct input_mode1 : input_list<Data, trusted> {};
 
-template <typename Data, bool trusted, int _resizeable>
-struct input_mode1<Data, trusted, true, false, _resizeable, true> {     // random, !sparse
-   typedef as_array<_resizeable, object_traits<Data>::allow_sparse> type;
+template <typename Data, bool trusted, int TResizeable>
+struct input_mode1<Data, trusted, true, false, TResizeable, true> {     // random, !sparse
+   typedef as_array<TResizeable, object_traits<Data>::allow_sparse> type;
 };
 
-template <typename Data, bool trusted, bool _random, int _resizeable, bool _mutable>
-struct input_mode1<Data, trusted, _random, true, _resizeable, _mutable> {       // sparse
-   typedef as_sparse<_resizeable> type;
+template <typename Data, bool trusted, bool TRandom, int TResizeable, bool TMutable>
+struct input_mode1<Data, trusted, TRandom, true, TResizeable, TMutable> {       // sparse
+   static const int element_dim=object_traits<typename Data::value_type>::total_dimension;
+   using type = std::conditional_t<element_dim==0, as_sparse<TResizeable>, as_array<TResizeable, false>>;
 };
 
 template <typename Data, bool trusted>
 struct input_mode1<Data, trusted, false, false, 0, true> {      // !random, !resizeable, mutable
-   typedef as_array<0,false> type;
+   typedef as_array<0, false> type;
 };
 
 template <typename Data, bool trusted>
@@ -282,43 +280,11 @@ public:
    template <typename Data>
    Input& operator>> (Data& data)
    {
-      typedef typename Concrete<Data>::type data_type;
-      static const bool can_read=is_parseable<data_type>::value || structural_helper<data_type, is_parseable_or_serializable>::value;
-      dispatch_serialized(concrete(data), has_serialized<data_type>(), bool_constant<can_read>());
-      return this->top();
-   }
-
-   template <typename Data, size_t n>
-   Input& operator>> (Data (&a)[n])
-   {
-      retrieve_container(this->top(), array2container(a), io_test::as_array<0,false>());
+      dispatch_generic_io(concrete(data), io_test::has_generic_input_operator<Input, Data>());
       return this->top();
    }
 
 protected:
-   template <typename Data, typename CanRead>
-   void dispatch_serialized(Data& data, std::true_type, CanRead)
-   {
-      if (this->top().serialized_value())
-         this->top() >> serialize(data);
-      else
-         dispatch_serialized(data, std::false_type(), CanRead());
-   }
-
-   template <typename Data>
-   void dispatch_serialized(Data& data, std::false_type, std::true_type)
-   {
-      // no serialization, can read as is
-      dispatch_generic_io(data, io_test::has_generic_input_operator<Input, Data>());
-   }
-
-   template <typename Data>
-   void dispatch_serialized(Data& data, std::false_type, std::false_type)
-   {
-      // no serialization, no input operators
-      throw std::invalid_argument((has_serialized<Data>::value ? "only serialized input possible for " : "no input operators known for ") + legible_typename<Data>());
-   }
-
    template <typename Data>
    void dispatch_generic_io(Data& data, std::true_type)
    {
@@ -329,7 +295,30 @@ protected:
    void dispatch_generic_io(Data& data, std::false_type)
    {
       // no generic input operator defined
+      dispatch_serialized(data, has_serialized<Data>(), bool_constant<is_readable<Data>::value>());
+   }
+
+   template <typename Data>
+   void dispatch_serialized(Data& data, std::true_type, std::true_type)
+   {
+      if (this->top().serialized_value())
+         this->top() >> serialize(data);
+      else
+         dispatch_serialized(data, std::false_type(), bool_constant<is_parseable<Data>::value || structural_helper<Data, is_parseable_or_serializable>::value>());
+   }
+
+   template <typename Data>
+   void dispatch_serialized(Data& data, std::false_type, std::true_type)
+   {
+      // no serialization, can read as is
       dispatch_retrieve(data, typename object_traits<Data>::model());
+   }
+
+   template <typename Data, typename THasSerialized>
+   void dispatch_serialized(Data& data, THasSerialized, std::false_type)
+   {
+      // no serialization, no input operators
+      throw std::invalid_argument((has_serialized<Data>::value ? "only serialized input possible for " : "no input operators known for ") + legible_typename<Data>());
    }
 
    template <typename Data, typename Model>
@@ -349,19 +338,12 @@ protected:
    {
       retrieve_composite(this->top(), data);
    }
-public:
-   template <typename Data>
-   typename make_list_reader<Data, Input>::type
-   create_list_input_iterator(Data* x)
-   {
-      return typename make_list_reader<Data, Input>::type (this->top().begin_list(x));
-   }
 };
 
 template <typename Input, typename Data, typename Masquerade>
 int retrieve_container(Input& src, Data& data, io_test::as_list<Masquerade>)
 {
-   typename Input::template list_cursor<Masquerade>::type c=src.begin_list(reinterpret_cast<Masquerade*>(&data));
+   auto&& c=src.begin_list(reinterpret_cast<Masquerade*>(&data));
    typename Data::iterator dst=data.begin(), end=data.end();
    int size=0;
 
@@ -386,7 +368,7 @@ template <typename Input, typename Data>
 void retrieve_container(Input& src, Data& data, io_test::as_set)
 {
    data.clear();
-   typename Input::template list_cursor<Data>::type c=src.begin_list(&data);
+   auto&& c=src.begin_list(&data);
    typedef typename item4insertion<typename Data::value_type>::type item_type;
    item_type item=item_type();
    typename Data::iterator end=data.end();
@@ -400,7 +382,7 @@ template <typename Input, typename Data>
 void retrieve_container(Input& src, Data& data, io_test::by_inserting)
 {
    data.clear();
-   typename Input::template list_cursor<Data>::type c=src.begin_list(&data);
+   auto&& c=src.begin_list(&data);
    typedef typename item4insertion<typename Data::value_type>::type item_type;
    item_type item=item_type();
    while (!c.at_end()) {
@@ -412,49 +394,50 @@ void retrieve_container(Input& src, Data& data, io_test::by_inserting)
 template <typename Value, typename CursorRef>
 class list_reader {
 protected:
-   alias<CursorRef> cursor;
-   typedef typename deref<CursorRef>::type cursor_type;
+   using alias_t = alias<CursorRef>;
+   using cursor_type = typename deref<CursorRef>::type;
+   alias_t cursor;
    Value item;
-   bool _end;
+   bool end_;
 
    void load()
    {
-      typename attrib<cursor_type>::plus_ref c=*cursor;
+      auto&& c=*cursor;
       if (c.at_end())
-         _end=true;
+         end_=true;
       else
          c >> item;
    }
 public:
-   list_reader(typename alias<CursorRef>::arg_type cursor_arg)
-      : cursor(cursor_arg), _end(false) { load(); }
+   template <typename Arg, typename=std::enable_if_t<std::is_constructible<alias_t, Arg>::value>>
+   explicit list_reader(Arg&& cursor_arg)
+      : cursor(std::forward<Arg>(cursor_arg))
+      , end_(false)
+   {
+      load();
+   }
 
-   typedef input_iterator_tag iterator_category;
-   typedef Value value_type;
-   typedef const Value& reference;
-   typedef const Value* pointer;
-   typedef ptrdiff_t difference_type;
+   using iterator_category = input_iterator_tag;
+   using value_type = Value;
+   using reference = const Value&;
+   using pointer = const Value*;
+   using difference_type = ptrdiff_t;
 
    reference operator* () const { return item; }
    pointer operator-> () const { return &item; }
 
-   bool at_end() const { return _end; }
+   bool at_end() const { return end_; }
 
    list_reader& operator++ () { load(); return *this; }
 private:
    list_reader& operator++ (int);
 };
 
-template <typename Data, typename Input>
-struct make_list_reader {
-   typedef list_reader<typename Data::value_type, typename Input::template list_cursor<Data>::type> type;
-};
-
 template <typename Input, typename Data> inline
 void fill_dense_from_dense(Input& src, Data& data)
 {
-   for (typename Entire<Data>::iterator dst=entire(data); !dst.at_end(); ++dst) {
-      typename Entire<Data>::iterator::reference dst_item=*dst;
+   for (auto dst=entire(data); !dst.at_end(); ++dst) {
+      auto&& dst_item=*dst;
       src >> dst_item;
    }
    src.finish();
@@ -484,8 +467,8 @@ void fill_dense_from_sparse(Input& src, Data& data, int d)
 template <typename Input, typename Data>
 void fill_sparse_from_dense(Input& src, Data& data)
 {
-   typename Entire<Data>::iterator dst=entire(data);
-   typename Data::value_type v;
+   auto dst=entire(data);
+   typename Data::value_type v{};
    int i=-1;
    if (!dst.at_end()) {
       for (;;) {
@@ -513,7 +496,7 @@ void fill_sparse_from_dense(Input& src, Data& data)
 template <typename Input, typename Data, typename LimitDim>
 void fill_sparse_from_sparse(Input& src, Data& data, const LimitDim& limit_dim)
 {
-   typename Entire<Data>::iterator dst=entire(data);
+   auto dst=entire(data);
    if (!dst.at_end()) {
       while (!src.at_end()) {
          const int index=src.index();
@@ -638,9 +621,9 @@ void check_and_fill_sparse_from_sparse(Input& src, Data& data)
 
 // resizeable, sparse input allowed
 template <typename Input, typename Data> inline
-void retrieve_container(Input& src, Data& data, io_test::as_array<1,true>)
+void retrieve_container(Input& src, Data& data, io_test::as_array<1, true>)
 {
-   typename Input::template list_cursor<Data>::type c=src.begin_list(&data);
+   auto&& c=src.begin_list(&data);
    if (c.sparse_representation())
       resize_and_fill_dense_from_sparse(c.set_option(SparseRepresentation<std::true_type>()), data);
    else
@@ -649,9 +632,9 @@ void retrieve_container(Input& src, Data& data, io_test::as_array<1,true>)
 
 // resizeable, only dense input allowed
 template <typename Input, typename Data> inline
-void retrieve_container(Input& src, Data& data, io_test::as_array<1,false>)
+void retrieve_container(Input& src, Data& data, io_test::as_array<1, false>)
 {
-   typename Input::template list_cursor<Data>::type c=src.begin_list(&data);
+   auto&& c=src.begin_list(&data);
    if (!Input::get_option(TrustedValue<std::true_type>()) &&
        c.sparse_representation())
       throw std::runtime_error("sparse input not allowed");
@@ -660,9 +643,9 @@ void retrieve_container(Input& src, Data& data, io_test::as_array<1,false>)
 
 // non-resizeable, sparse input allowed
 template <typename Input, typename Data> inline
-void retrieve_container(Input& src, Data& data, io_test::as_array<0,true>)
+void retrieve_container(Input& src, Data& data, io_test::as_array<0, true>)
 {
-   typename Input::template list_cursor<Data>::type c=src.begin_list(&data);
+   auto&& c=src.begin_list(&data);
    if (c.sparse_representation())
       check_and_fill_dense_from_sparse(c.set_option(SparseRepresentation<std::true_type>()), data);
    else
@@ -671,9 +654,9 @@ void retrieve_container(Input& src, Data& data, io_test::as_array<0,true>)
 
 // non-resizeable, only dense input allowed
 template <typename Input, typename Data>
-void retrieve_container(Input& src, Data& data, io_test::as_array<0,false>)
+void retrieve_container(Input& src, Data& data, io_test::as_array<0, false>)
 {
-   typename Input::template list_cursor<Data>::type c=src.begin_list(&data);
+   auto&& c=src.begin_list(&data);
    if (!Input::get_option(TrustedValue<std::true_type>()) &&
        c.sparse_representation())
       throw std::runtime_error("sparse input not allowed");
@@ -684,7 +667,7 @@ void retrieve_container(Input& src, Data& data, io_test::as_array<0,false>)
 template <typename Input, typename Data, int is_resizeable> inline
 void retrieve_container(Input& src, Data& data, io_test::as_sparse<is_resizeable>)
 {
-   typename Input::template list_cursor<Data>::type c=src.begin_list(&data);
+   auto&& c=src.begin_list(&data);
    if (c.sparse_representation())
       resize_and_fill_sparse_from_sparse(c.set_option(SparseRepresentation<std::true_type>()), data, bool_constant<(is_resizeable>0)>());
    else
@@ -695,7 +678,7 @@ void retrieve_container(Input& src, Data& data, io_test::as_sparse<is_resizeable
 template <typename Input, typename Data> inline
 void retrieve_container(Input& src, Data& data, io_test::as_sparse<0>)
 {
-   typename Input::template list_cursor<Data>::type c=src.begin_list(&data);
+   auto&& c=src.begin_list(&data);
    if (c.sparse_representation())
       check_and_fill_sparse_from_sparse(c.set_option(SparseRepresentation<std::true_type>()), data);
    else
@@ -742,50 +725,45 @@ void resize_and_fill_matrix(Input& src, Data& data, int r, int_constant<1>)
 template <typename Input, typename Data>
 void retrieve_container(Input& src, Data& data, io_test::as_matrix<2>)
 {
-   typename Input::template list_cursor< Rows<Data> >::type c=src.begin_list((Rows<Data>*)0);
+   auto&& c=src.begin_list((Rows<Data>*)0);
+   if (!Input::get_option(TrustedValue<std::true_type>()) &&
+       c.sparse_representation())
+      throw std::runtime_error("sparse input not allowed");
    resize_and_fill_matrix(c, data, c.size(), io_test::unknown_columns<Data>());
 }
 
 // resizeable via rows()
-template <typename Input, typename Data>
-void retrieve_container(Input& src, Data& data, io_test::as_matrix<1>)
+template <typename Input, typename Data, int TResizeable>
+typename std::enable_if<(TResizeable < 2)>::type
+retrieve_container(Input& src, Data& data, io_test::as_matrix<TResizeable>)
 {
-   Rows<Data>& s=rows(data);
-   typename Input::template list_cursor< Rows<Data> >::type c=src.begin_list(&s);
-   resize_and_fill_dense_from_dense(c, s);
-}
-
-// non-resizeable
-template <typename Input, typename Data>
-void retrieve_container(Input& src, Data& data, io_test::as_matrix<0>)
-{
-   Rows<Data>& s=rows(data);
-   typename Input::template list_cursor< Rows<Data> >::type c=src.begin_list(&s);
-   check_and_fill_dense_from_dense(c, s);
+   retrieve_container(src, rows(data), io_test::as_array<TResizeable, false>());
 }
 
 template <typename T, typename CursorRef>
 class composite_reader : public composite_reader<typename list_tail<T>::type, CursorRef> {
 protected:
-   typedef composite_reader<typename list_tail<T>::type, CursorRef> super;
-   static const bool is_last=false;
+   using base_t = composite_reader<typename list_tail<T>::type, CursorRef>;
+   using typename base_t::alias_t;
+   static constexpr bool is_last=false;
 public:
-   typedef typename list_head<T>::type element_type;
-   typedef typename deref<element_type>::type value_type;
+   using element_type = typename list_head<T>::type;
+   using value_type = typename deref<element_type>::type;
 
-   composite_reader(typename alias<CursorRef>::arg_type cursor_arg)
-      : super(cursor_arg) {}
+   template <typename Arg, typename=std::enable_if_t<std::is_constructible<alias_t, Arg>::value>>
+   explicit composite_reader(Arg&& cursor_arg)
+      : base_t(std::forward<Arg>(cursor_arg)) {}
 
-   super& operator<< (typename attrib<element_type>::plus_ref elem)
+   base_t& operator<< (typename attrib<element_type>::plus_ref elem)
    {
-      typename attrib<CursorRef>::plus_ref c=*this->cursor;
+      auto&& c=*this->cursor;
       if (c.at_end()) {
          operations::clear<value_type> zero;
          zero(elem);
       } else {
          c >> elem;
       }
-      if (super::is_last) c.finish();
+      if (base_t::is_last) c.finish();
       return *this;
    }
 };
@@ -793,9 +771,12 @@ public:
 template <typename CursorRef>
 class composite_reader<void, CursorRef> {
 protected:
-   alias<CursorRef> cursor;
+   using alias_t = alias<CursorRef>;
+   alias_t cursor;
 
-   composite_reader(typename alias<CursorRef>::arg_type cursor_arg) : cursor(cursor_arg) {}
+   template <typename Arg, typename=std::enable_if_t<std::is_constructible<alias_t, Arg>::value>>
+   composite_reader(Arg&& cursor_arg)
+      : cursor(std::forward<Arg>(cursor_arg)) {}
 
    static const bool is_last=true;
 };
@@ -817,16 +798,7 @@ public:
    template <typename Data>
    Output& operator<< (const Data& data)
    {
-      typedef typename Concrete<Data>::type data_type;
-      static const bool can_write=is_printable<data_type>::value || structural_helper<data_type, is_writeable>::value;
-      dispatch_serialized(concrete(data), has_serialized<data_type>(), bool_constant<can_write>());
-      return this->top();
-   }
-
-   template <typename Data, size_t n>
-   Output& operator<< (const Data (&data)[n])
-   {
-      store_container(array2container(data), std::false_type());
+      dispatch_generic_io(concrete(data), io_test::has_generic_output_operator<Output, Data>());
       return this->top();
    }
 
@@ -838,29 +810,6 @@ public:
    }
 
 protected:
-   template <typename Data, typename CanWrite>
-   void dispatch_serialized(const Data& data, std::true_type, CanWrite)
-   {
-      if (this->top().serialized_value())
-         this->top() << serialize(data);
-      else
-         dispatch_serialized(data, std::false_type(), CanWrite());
-   }
-
-   template <typename Data>
-   void dispatch_serialized(const Data& data, std::false_type, std::true_type)
-   {
-      // no serialization, can write as is
-      dispatch_generic_io(data, io_test::has_generic_output_operator<Output, Data>());
-   }
-
-   template <typename Data>
-   void dispatch_serialized(const Data& data, std::false_type, std::false_type)
-   {
-      // no serialization, no output operators
-      throw std::invalid_argument((has_serialized<Data>::value ? "only serialized output possible for " : "no output operators known for ") + legible_typename<Data>());
-   }
-
    template <typename Data>
    void dispatch_generic_io(const Data& data, std::true_type)
    {
@@ -871,7 +820,30 @@ protected:
    void dispatch_generic_io(const Data& data, std::false_type)
    {
       // no generic output operator defined
+      dispatch_serialized(data, has_serialized<Data>(), bool_constant<is_writeable<Data>::value>());
+   }
+
+   template <typename Data>
+   void dispatch_serialized(const Data& data, std::true_type, std::true_type)
+   {
+      if (this->top().serialized_value())
+         this->top() << serialize(data);
+      else
+         dispatch_serialized(data, std::false_type(), bool_constant<is_printable<Data>::value || structural_helper<Data, is_printable_or_serializable>::value>());
+   }
+
+   template <typename Data>
+   void dispatch_serialized(const Data& data, std::false_type, std::true_type)
+   {
+      // no serialization, can write as is
       dispatch_store(data, typename object_traits<Data>::model());
+   }
+
+   template <typename Data, typename THasSerialized>
+   void dispatch_serialized(const Data& data, THasSerialized, std::false_type)
+   {
+      // no serialization, no output operators
+      throw std::invalid_argument((has_serialized<Data>::value ? "only serialized output possible for " : "no output operators known for ") + legible_typename<Data>());
    }
 
    template <typename Data, typename Model>
@@ -895,7 +867,7 @@ protected:
    template <typename Data>
    void dispatch_container(const Data& data, int_constant<2>)
    {
-      store_list(rows(data));
+      dispatch_store(rows(data), is_container());
    }
 
    template <typename Data>
@@ -907,10 +879,31 @@ protected:
    template <typename Data>
    void store_container(const Data& data, std::true_type)
    {
-      if (this->top().prefer_sparse_representation(data))
+      const int choose_sparse=this->top().choose_sparse_representation();
+      if (choose_sparse>0 || (choose_sparse==0 && data.prefer_sparse_representation()))
          store_sparse(data);
       else
-         store_list(data);
+         store_dense(data, typename object_traits<typename Data::value_type>::model());
+   }
+
+   template <typename Data>
+   void store_dense(const Data& data, is_scalar)
+   {
+      store_list(data);
+   }
+
+   template <typename Data, typename Model>
+   void store_dense(const Data& data, Model)
+   {
+      auto&& c=this->top().begin_list(&data);
+      int ord=0;
+      for (auto src=data.begin(); !src.at_end(); ++src, ++ord) {
+         for (; ord < src.index(); ++ord)
+            c.non_existent();
+         c << *src;
+      }
+      for (const int d=data.dim(); ord<d; ++ord)
+         c.non_existent();
    }
 
    template <typename Data>
@@ -919,11 +912,7 @@ protected:
       store_composite(data);
    }
 
-   template <typename Data>
-   bool prefer_sparse_representation(const Data& data) const
-   {
-      return data.size()*2 < data.dim();
-   }
+   static constexpr int choose_sparse_representation() { return 0; }
 
 public:
    template <typename Data>
@@ -952,11 +941,8 @@ template <typename Output>
 template <typename Masquerade, typename Data>
 void GenericOutputImpl<Output>::store_list_as(const Data& data)
 {
-   typedef typename Output::template list_cursor<Masquerade>::type cursor_type;
-   cursor_type c=this->top().begin_list(reinterpret_cast<const Masquerade*>(&data));
-   for (typename ensure_features<Data, cons<dense, end_sensitive> >::const_iterator
-           src=ensure(data, (cons<dense, end_sensitive>*)0).begin();
-        !src.at_end(); ++src)
+   auto&& c=this->top().begin_list(reinterpret_cast<const Masquerade*>(&data));
+   for (auto src=entire<dense>(data); !src.at_end(); ++src)
       c << *src;
    c.finish();
 }
@@ -984,9 +970,8 @@ template <typename Output>
 template <typename Masquerade, typename Data>
 void GenericOutputImpl<Output>::store_sparse_as(const Data& data)
 {
-   typedef typename Output::template sparse_cursor<Masquerade>::type cursor_type;
-   cursor_type c=this->top().begin_sparse(reinterpret_cast<const Masquerade*>(&data));
-   for (typename Data::const_iterator src=data.begin();  !src.at_end(); ++src)
+   auto&& c=this->top().begin_sparse(reinterpret_cast<const Masquerade*>(&data));
+   for (auto src=data.begin();  !src.at_end(); ++src)
       c << src;
    c.finish();
 }
@@ -994,18 +979,21 @@ void GenericOutputImpl<Output>::store_sparse_as(const Data& data)
 template <typename T, typename CursorRef>
 class composite_writer : public composite_writer<typename list_tail<T>::type, CursorRef> {
 protected:
-   typedef composite_writer<typename list_tail<T>::type, CursorRef> super;
-   static const bool is_last=false;
+   using base_t = composite_writer<typename list_tail<T>::type, CursorRef>;
+   using typename base_t::alias_t;
+   static constexpr bool is_last=false;
 public:
-   typedef typename list_head<T>::type element_type;
+   using element_type = typename list_head<T>::type;
 
-   composite_writer(typename alias<CursorRef>::arg_type cursor_arg) : super(cursor_arg) {}
+   template <typename Arg, typename=std::enable_if_t<std::is_constructible<alias_t, Arg>::value>>
+   explicit composite_writer(Arg&& cursor_arg)
+      : base_t(std::forward<Arg>(cursor_arg)) {}
 
-   super& operator<< (typename attrib<element_type>::plus_const_ref elem)
+   base_t& operator<< (typename attrib<element_type>::plus_const_ref elem)
    {
-      typename attrib<CursorRef>::plus_ref c=*this->cursor;
+      auto&& c=*this->cursor;
       c << elem;
-      if (super::is_last) c.finish();
+      if (base_t::is_last) c.finish();
       return *this;
    }
 };
@@ -1013,9 +1001,12 @@ public:
 template <typename CursorRef>
 class composite_writer<void, CursorRef> {
 protected:
-   alias<CursorRef> cursor;
+   using alias_t = alias<CursorRef>;
+   alias_t cursor;
 
-   composite_writer(typename alias<CursorRef>::arg_type cursor_arg) : cursor(cursor_arg) {}
+   template <typename Arg, typename=std::enable_if_t<std::is_constructible<alias_t, Arg>::value>>
+   explicit composite_writer(Arg&& cursor_arg)
+      : cursor(std::forward<Arg>(cursor_arg)) {}
 
    static const bool is_last=true;
 };
@@ -1042,6 +1033,7 @@ Input& operator>> (GenericInput<Input>& is, const nothing&)
    return is.top();
 }
 
+// TODO: remove this
 template <typename Container>
 class IO_Array : public Container {
 protected:
@@ -1069,6 +1061,7 @@ struct redirect_object_traits< IO_Array<Container> > : object_traits<Container> 
    static const IO_separator_kind IO_separator=IO_sep_containers;
 };
 
+// TODO: remove this
 template <typename Container>
 class IO_List : public Container {
 protected:
@@ -1096,6 +1089,7 @@ struct redirect_object_traits< IO_List<Container> > : object_traits<Container> {
    static const IO_separator_kind IO_separator=IO_sep_inherit;
 };
 
+// TODO: remove this
 template <typename Container>
 class IO_Sparse : public ensure_features<Container, pure_sparse>::container {
 protected:
@@ -1162,7 +1156,7 @@ struct is_parseable {
    typedef typename deref<T>::type value_type;
    static const bool value=io_test::has_std_input_operator<value_type>::value ||
                            io_test::has_generic_input_operator<PlainParser<>,value_type>::value ||
-                           structural_helper<value_type, is_parseable_or_serializable>::value;
+                           structural_helper<T, pm::is_parseable>::value;
 };
 
 template <typename T>
@@ -1175,7 +1169,7 @@ struct is_printable {
    typedef typename deref<T>::type value_type;
    static const bool value=io_test::has_std_output_operator<value_type>::value ||
                            io_test::has_generic_output_operator<PlainPrinter<>,value_type>::value ||
-                           structural_helper<value_type, is_printable_or_serializable>::value;
+                           structural_helper<T, pm::is_printable>::value;
 };
 
 template <typename T>
@@ -1187,7 +1181,14 @@ struct is_printable_or_serializable {
 };
 
 template <typename T>
-struct is_writeable : is_printable_or_serializable<T> {};
+struct is_readable {
+   static const bool value=is_parseable_or_serializable<T>::value || structural_helper<T, pm::is_readable>::value;
+};
+
+template <typename T>
+struct is_writeable {
+   static const bool value=is_printable_or_serializable<T>::value || structural_helper<T, pm::is_writeable>::value;
+};
 
 }
 

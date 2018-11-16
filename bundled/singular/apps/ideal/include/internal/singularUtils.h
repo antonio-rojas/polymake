@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -18,12 +18,11 @@
 #define POLYMAKE_IDEAL_INTERNAL_SINGULAR_UTILS_H
 
 // Singular includes
-#include <Singular/libsingular.h>
+#include "polymake/ideal/internal/singularInclude.h"
 
 // polymake includes
 #include "polymake/client.h"
 #include "polymake/Map.h"
-// #include "polymake/Polynomial.h"
 
 namespace polymake { 
 namespace ideal {

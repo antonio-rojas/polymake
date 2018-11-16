@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -22,11 +22,11 @@
 namespace pm {
 
 template <typename E>
-typename std::enable_if<is_field<E>::value, E>::type
+std::enable_if_t<is_field<E>::value, E>
 det(SparseMatrix<E> M)
 {
    const int dim = M.rows();
-   if (!dim) return zero_value<E>();
+   if (!dim) return one_value<E>();
 
    std::vector<int> column_permutation(dim);
    copy_range(entire(sequence(0, dim)), column_permutation.begin());
@@ -57,13 +57,12 @@ det(SparseMatrix<E> M)
 }
 
 template <typename E>
-typename std::enable_if<is_field<E>::value, SparseVector<E>>::type
+std::enable_if_t<is_field<E>::value, SparseVector<E>>
 reduce(SparseMatrix<E> M, SparseVector<E> V)
 {
    const int n_cols=M.cols();
    int col=0;
-   for (auto pivotrow=entire(rows(M));
-        !pivotrow.at_end() && col < n_cols; ++pivotrow) {
+   for (auto pivotrow=entire(rows(M)); !pivotrow.at_end() && col < n_cols; ++pivotrow) {
       if (pivotrow->empty()) continue;
 
       auto pivot=pivotrow->begin();
@@ -86,7 +85,7 @@ reduce(SparseMatrix<E> M, SparseVector<E> V)
 }
 
 template <typename E>
-typename std::enable_if<is_field<E>::value, SparseMatrix<E>>::type
+std::enable_if_t<is_field<E>::value, SparseMatrix<E>>
 inv(SparseMatrix<E> M)
 {
    const int dim=M.rows();
@@ -115,18 +114,18 @@ inv(SparseMatrix<E> M)
    return R*L;
 }
 
-template <typename E>
-typename std::enable_if<is_field<E>::value, Vector<E>>::type
+template <typename E, bool ensure_nondegenerate=true>
+std::enable_if_t<is_field<E>::value, Vector<E>>
 lin_solve(SparseMatrix<E> A, Vector<E> B)
 {
    const int m=A.rows(), n=A.cols();
    int non_empty_rows=m-n;
-   if (non_empty_rows<0) throw degenerate_matrix();
+   if (ensure_nondegenerate && non_empty_rows<0) throw underdetermined();
 
    for (auto r=entire(rows(A)); !r.at_end(); ++r) {
       const int pr=r.index();
       if (r->empty()) {
-         if (--non_empty_rows<0) throw degenerate_matrix();
+         if (ensure_nondegenerate && --non_empty_rows<0) throw degenerate_matrix();
          if (!is_zero(B[pr])) throw infeasible();
          continue;
       }
@@ -148,10 +147,10 @@ lin_solve(SparseMatrix<E> A, Vector<E> B)
    }
 
    Vector<E> result(A.cols());
-   for (auto r=entire(reversed(rows(A))); !r.at_end(); ++r) {
+   for (auto r=entire<reversed>(rows(A)); !r.at_end(); ++r) {
       if (r->empty()) continue;
-      typename SparseMatrix<E>::row_type::iterator in_row=r->begin();
-      typename SparseMatrix<E>::col_type::iterator in_col=cross_direction(in_row);
+      auto in_row=r->begin();
+      auto in_col=cross_direction(in_row);
       const E& elem=result[in_row.index()]=B[r.index()];
       while (!(--in_col).at_end())
          B[in_col.index()] -= elem * (*in_col);

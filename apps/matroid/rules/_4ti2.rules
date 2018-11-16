@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -21,8 +21,7 @@ CREDIT 4ti2
 custom $circuits;
 
 CONFIGURE {
-    ($circuits=$polytope::groebner) =~ s/groebner$/circuits/;
-
+   $circuits = $polytope::groebner =~ s/groebner$/circuits/r;
 }
 
 label _4ti2

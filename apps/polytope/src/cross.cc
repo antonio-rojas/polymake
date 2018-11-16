@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -19,6 +19,7 @@
 #include "polymake/SparseMatrix.h"
 #include "polymake/IncidenceMatrix.h"
 #include "polymake/polytope/CubeFacets.h"
+#include "polymake/polytope/cube_group.h"
 
 namespace polymake { namespace polytope {
 
@@ -36,65 +37,19 @@ perl::Object cross(int d, const Scalar& s, perl::OptionSet options)
 
    const int n_vertices=2*d;
 
-   perl::Object p(perl::ObjectType::construct<Scalar>("Polytope"));
+   perl::Object p("Polytope", mlist<Scalar>());
    p.set_description() << "cross-polytope of dimension " << d << endl;
 
    SparseMatrix<Scalar> V(n_vertices,d+1);
    V.col(0).fill(1);
    int c=1;
-   for (typename Entire< Rows< SparseMatrix<Scalar> > >::iterator v=entire(rows(V)); !v.at_end(); ++v, ++c) {
+   for (auto v=entire(rows(V)); !v.at_end(); ++v, ++c) {
       (*v)[c]=s;
       ++v;
       (*v)[c]=-s;
    }
    IncidenceMatrix<> VIF(1<<d, n_vertices);
    copy_range(CubeFacets<int>(d).begin(), cols(VIF).begin());
-
-   bool group_flag = options["group"];
-   if ( group_flag ) {
-      Array< Array< int > > gens(d);
-      if ( d==1 ) {
-         Array< int > gen(1);
-         gen[0]=0;
-         gens[0]=gen;
-      } else {
-         Array< int > gen(2*d);
-         gen[0]=1;
-         gen[1]=0;
-         for ( int j=2; j<2*d; ++j ) {
-            gen[j]=j; 
-         }
-         gens[0]=gen;
-
-         // restore gen (=> gen=[0..2d-1])
-         gen[0]=0;
-         gen[1]=1;
-
-         for ( int i=1; i<d; ++i ) { 
-            gen[2*i-2] = 2*i;
-            gen[2*i] = 2*i-2;
-            gen[2*i-1] = 2*i+1;
-            gen[2*i+1] = 2*i-1;
-            gens[i]=gen;
-
-            // restore gen (=> gen=[0..2d-1])
-            gen[2*i-2] = 2*i-2;
-            gen[2*i] = 2*i;
-            gen[2*i-1] = 2*i-1;
-            gen[2*i+1] = 2*i+1;
-         }
-      }
-
-      perl::Object a("group::PermutationAction");
-      a.take("GENERATORS") << gens;
-
-      perl::Object g("group::Group");
-      g.set_description() << "full combinatorial group on vertices" << endl;
-      g.set_name("fullCombinatorialGroupOnRays");
-      g.take("RAYS_ACTION") << a;
-
-      p.take("GROUP") << g;
-   }
 
    p.take("CONE_AMBIENT_DIM") << d+1;
    p.take("CONE_DIM") << d+1;
@@ -103,6 +58,13 @@ perl::Object cross(int d, const Scalar& s, perl::OptionSet options)
    p.take("VERTICES_IN_FACETS") << VIF;
    p.take("BOUNDED") << true;
    p.take("CENTERED") << true;
+
+   const bool
+      group_flag = options["group"],
+      character_table_flag = options["character_table"];
+
+   if (group_flag)
+      add_group(p, d, "FACETS_ACTION", "VERTICES_ACTION", character_table_flag);
 
    return p;
 }
@@ -122,6 +84,7 @@ UserFunctionTemplate4perl("# @category Producing regular polytopes and their gen
                           "# @param Int d the dimension"
                           "# @param Scalar scale the absolute value of each non-zero vertex coordinate. Needs to be positive. The default value is 1."
                           "# @option Bool group add a symmetry group description to the resulting polytope"
+                          "# @option Bool character_table add the character table to the symmetry group description, if 0<d<7; default 1"
                           "# @return Polytope<Scalar>"
                           "# @example To create the 3-dimensional cross polytope, type"
                           "# > $p = cross(3);"
@@ -142,11 +105,11 @@ UserFunctionTemplate4perl("# @category Producing regular polytopes and their gen
                           "# To also calculate the symmetry group, do this:"
                           "# > $p = cross(3,group=>1);"
                           "# You can then print the generators of this group like this:"
-                          "# > print $p->GROUP->GENERATORS;"
+                          "# > print $p->GROUP->RAYS_ACTION->GENERATORS;"
                           "# | 1 0 2 3 4 5"
                           "# | 2 3 0 1 4 5"
                           "# | 0 1 4 5 2 3",
-                          "cross<Scalar> [ is_ordered_field(type_upgrade<Scalar, Rational>) ] (Int; type_upgrade<Scalar>=1, { group => undef } )");
+                          "cross<Scalar> [ is_ordered_field(type_upgrade<Scalar, Rational>) ] (Int; type_upgrade<Scalar>=1, { group => undef, character_table => 1 } )");
 
 UserFunction4perl("# @category Producing regular polytopes and their generalizations"
                   "# Produce a regular octahedron, which is the same as the 3-dimensional cross polytope."

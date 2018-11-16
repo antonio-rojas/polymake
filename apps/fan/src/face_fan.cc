@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -25,7 +25,7 @@ namespace polymake { namespace fan {
 template <typename Coord>
 perl::Object face_fan(perl::Object p, Vector<Coord> v)
 {
-   perl::ObjectType t = perl::ObjectType::construct<Coord>("PolyhedralFan");
+   perl::ObjectType t("PolyhedralFan", mlist<Coord>());
    perl::Object ff(t); 
 
    const Matrix<Coord> rays = p.give("VERTICES");

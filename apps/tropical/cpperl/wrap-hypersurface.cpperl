@@ -1,0 +1,7 @@
+{"app": "tropical", "embed": "hypersurface.cc",
+ "inst": [
+  {"args": ["Max", "void"], "func": "hypersurface", "include": ["polymake/TropicalNumber.h"], "sig": "hypersurface:T1.B", "tp": "1"},
+  {"args": ["Min", "void"], "func": "hypersurface", "include": ["polymake/TropicalNumber.h"], "sig": "hypersurface:T1.B", "tp": "1"},
+  {"args": ["Min", "perl::Canned<const Vector<bool>&>", "perl::Canned<const Matrix<int>&>", "perl::Canned<const Vector<TropicalNumber<Min, Rational>>&>", "perl::Canned<const Matrix<Rational>&>", "perl::Canned<const IncidenceMatrix<NonSymmetric>&>"], "func": "real_facets", "include": ["polymake/IncidenceMatrix.h", "polymake/Matrix.h", "polymake/Rational.h", "polymake/TropicalNumber.h", "polymake/Vector.h"], "sig": "real_facets:T1.X.X.X.X.X", "tp": 1},
+ null ],
+"version": 3}

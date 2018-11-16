@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -55,6 +55,8 @@ package application;
 #
 #  The default setting "AUTO" lets the file name be derived from the drawing title.
 #  The automatically generated file name is displayed in the verbose mode.
+# @example [nocompare] The following prints a metapost description of the complete graph with 3 nodes in the console:
+# > metapost(complete(3)->VISUAL,File=>"-");
 
 user_function metapost(Visual::Object+, { File => "AUTO" }) {
    visualize_explicit(@_, "Metapost");

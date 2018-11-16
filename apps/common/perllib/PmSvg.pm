@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -72,7 +72,7 @@ sub transform {
    my $self=shift;
    my @xy=( $self->scaleX * ($_[0] - $self->minX) + $self->marginLeft,
        (-1)*($self->scaleY * ($_[1] - $self->minY) + $self->marginBottom) );
-   wantarray ? @xy : sprintf("%.3f %3.f", @xy)
+   wantarray ? @xy : sprintf("%.3f %.3f", @xy)
 }
 
 sub append {
@@ -135,9 +135,11 @@ sub toString {
    my $viewbox_width = $self->canvas_width + $self->marginLeft + $self->marginRight;
    my $viewbox_height = $self->canvas_height + $self->marginBottom + $self->marginTop;
    my $svg = SVG->new(id=>'document',width=>pt($Wpaper),height=>pt($Hpaper),viewBox=>"0 -$viewbox_height $viewbox_width $viewbox_height");
-   $svg->title(id=>'document_title')->cdata($self->title);
+   my $title = $self->title // "unnamed";
+   $svg->title(id=>'document_title')->cdata($title);
+
    foreach (@{$self->geometries}) {
-      $_->draw($self,$svg);
+      $_->draw($self,$svg,$self->scaleX);
    }
    return $svg->xmlify;
 }
@@ -166,7 +168,6 @@ sub init {
       assign_min_max($self->minX, $self->maxX, $coord->[0]);
       assign_min_max($self->minY, $self->maxY, $coord->[1]);
    }
-   return unless defined(wantarray);
 
    my $last_point=$#{$self->coords};
    my ($labelwidth, $max_radius);
@@ -198,33 +199,34 @@ sub init {
    if (defined($P->VertexLabels)) {
       map { assign_max($labelwidth, length($P->VertexLabels->($_))) } 0..$#{$self->coords};
    }
-   return ($labelwidth, $max_radius);
-}
 
-sub new {
-   my $self=&_new;
-   my ($labelwidth, $max_radius)=$self->init;
    $self->marginLeft=$self->marginRight=
       max($max_radius, ($avg_char_width * $fontsize*$labelwidth)/2) + $text_spacing/2;
    $self->marginBottom= $max_radius + $text_spacing/2;
    $self->marginTop=$self->marginBottom + $fontsize + $text_spacing;
+}
+
+sub new {
+   my $self=&_new;
+   $self->init;
    $self;
 }
 
 sub draw_points {
-   my ($self, $svg)=@_;
+   my ($self, $svggroups)=@_;
    my $P=$self->source;
-   my $get_color=$P->VertexColor;
+   my $get_color=$P->VertexColor // new RGB("255 255 255");
    my $static_color;
    if (defined($get_color) && !is_code($get_color)) {
-      $static_color=$get_color->toInt;
+      $static_color=$get_color;
    }
    my $p = 0;
    foreach my $coord (@{$self->coords}){
       my $r=$self->radius->[$p] or next;
-      my $color = $static_color // $get_color->($p)->toInt;
+      my $color = $static_color // $get_color->($p) // new RGB("255 255 255");
+      $color = $color->toInt;
       $color =~ tr/" "/","/;
-      $svg->circle(
+      @{$svggroups}[$p]->circle(
          cx => $coord->[0],
          cy => $coord->[1],
          r  => $r,
@@ -234,7 +236,7 @@ sub draw_points {
       );
       if (defined($P->VertexLabels)) {
          my $vlabel = $P->VertexLabels->($p);
-         $svg->text(
+         @{$svggroups}[$p]->text(
             x => $coord->[0], 
             y => $coord->[1] - $text_spacing - $r,
             'text-anchor' => "middle",
@@ -242,6 +244,8 @@ sub draw_points {
             'font-size' => $fontsize
          )->cdata($vlabel);
       }
+   }
+   continue {
       ++$p;
    }
 }
@@ -249,14 +253,17 @@ sub draw_points {
 sub draw_lines { }
 
 sub draw {
-   my ($self,$f, $svg)=@_;
+   my ($self,$f, $svg, $scaleX)=@_;
    foreach my $p (@{$self->coords}) {
       @$p=$f->transform(@$p);
    }
-   $self->draw_lines($svg);  
-   $self->draw_points($svg) if @{$self->radius};
+   $self->draw_lines($svg);
+   # No grouping here. All points are going to be drawn to $svg
+   my @svggroups = map { $svg } @{$self->coords};
+   $self->draw_points(\@svggroups,$scaleX) if @{$self->radius};
    $svg;
 }
+
 
 ###########################################################################
 package PmSvg::Solid;
@@ -274,27 +281,23 @@ sub draw_facet {
    } else {
       $facet_color=get_RGB($Visual::Color::facets)->toInt;
    }
+   $facet_color =~ tr/" "/","/;
    if (!defined $facet_transparency) {
       $facet_transparency = 1;
    }
    if ($edge_style =~ $Visual::hidden_re) {
-      $lw=0;
-   } else {
-      if (defined $edge_color) {
-    $edge_color=$edge_color->toInt;
+         $lw=0;
       } else {
-    $edge_color=get_RGB($Visual::Color::edges)->toInt;
-      }
-      if (defined $edge_thickness) {
-    $lw=$edge_thickness*$line_width;
-      }
-   }
-   if (defined $edge_color) {
-      $edge_color =~ tr/" "/","/;
-   }
-   if (defined $facet_color) {
-      $facet_color =~ tr/" "/","/;
-   }
+         if (defined $edge_color) {
+       $edge_color=$edge_color->toInt;
+         } else {
+       $edge_color=get_RGB($Visual::Color::edges)->toInt;
+         }
+         $edge_color =~ tr/" "/","/;
+         if (defined $edge_thickness) {
+       $lw=$edge_thickness*$line_width;
+         }
+      }   
 
    my @xv =  map { $_->[0] } @{$points}; 
    my @yv =  map { $_->[1] } @{$points}; 
@@ -313,15 +316,124 @@ sub draw_facet {
       });
 }
 
-sub draw_lines {
-   my ($self, $svg)=@_;
-   my $P=$self->source;
-   my $i=0;
-   foreach my $polygon (@{$P->Facets}) {
-      draw_facet($svg, (map { my $decor=$P->$_; is_code($decor) ? $decor->($i) : $decor }
+sub draw {
+   my ($self,$f, $svg, $scaleX)=@_;
+   my $P = $self->source;
+     
+   foreach my $p (@{$self->coords}) {
+      @$p=$f->transform(@$p);
+   }
+   
+   my $nfacets = scalar(@{$P->Facets});
+
+   my @vertexgroups = map { $svg } @{$self->coords};
+   
+   # only group if there are facet normals 
+   if (defined($P->FacetNormals)) {    
+      # groups are rendered in the same order as they are created
+      my $bfacets = $svg->group();
+      my $bverts = $svg->group();
+      my $ffacets = $svg->group();
+      my $fverts = $svg->group();
+      @vertexgroups = map { $bverts } @{$self->coords};
+
+      # iterate over facets and draw them
+      my $facetgroup;
+      foreach my $i (0..$nfacets-1) {
+         my $polygon = $P->Facets->[$i];
+         my $facetnormal = $P->FacetNormals->[$i]; 
+         if ($facetnormal->[-1] < 0) {
+            $facetgroup = $bfacets;
+         } else {
+            $facetgroup = $ffacets;
+            foreach my $vert (@{$polygon}){
+               $vertexgroups[$vert] = $fverts;
+            }
+         }
+         draw_facet($facetgroup, (map { my $decor=$P->$_; is_code($decor) ? $decor->($i) : $decor }
                   qw( FacetColor FacetTransparency FacetStyle EdgeColor EdgeThickness EdgeStyle )),
              [ @{$self->coords}[ @{$polygon} ] ]);
-      ++$i;
+      } 
+   } else {
+      foreach my $i (0..$nfacets-1) {
+         my $polygon = $P->Facets->[$i];
+         draw_facet($svg, (map { my $decor=$P->$_; is_code($decor) ? $decor->($i) : $decor }
+                  qw( FacetColor FacetTransparency FacetStyle EdgeColor EdgeThickness EdgeStyle )),
+             [ @{$self->coords}[ @{$polygon} ] ]);
+      }
+   }
+   $self->draw_points(\@vertexgroups,$scaleX) if @{$self->radius};
+   $svg;
+}
+    
+
+      
+##############################################################################################
+#
+#  Wire model (e.g. a graph)
+
+package PmSvg::Wire;
+use Polymake::Struct (
+   [ '@ISA' => 'PointSet' ],
+);
+
+sub draw_edge {
+   my ($self, $svg, $edge, $arrows)=@_;
+   my ($s, $t)= $arrows!=-1 ? @$edge : reverse @$edge;
+   my $style=$self->source->EdgeStyle;
+   $style=$style->($edge) if is_code($style);
+   if ($style =~ $Visual::hidden_re) {
+      return;
+   }
+   my $lw=$line_width;
+   my $thickness=$self->source->EdgeThickness;
+   $thickness=$thickness->($edge) if is_code($thickness);
+   if (defined($thickness)) {
+      return if $thickness==0;
+      $lw*=$thickness;
+   }
+   my $color=$self->source->EdgeColor;
+   $color=$color->($edge) if is_code($color);
+   $color //= get_RGB($Visual::Color::edges);
+   $color=$color->toInt(); $color =~ tr/" "/","/;
+   my ($coord_s,$coord_t) = ($self->coords->[$s],$self->coords->[$t]);
+   my %line_style = (
+         'stroke' => "rgb(" . "$color" . ")",
+         'stroke-width' => $lw
+         );
+   if ($arrows!=0) {
+      $line_style{"marker-end"}="url(#arrow)";
+   }
+   my $line = $svg->line(
+         x1=>$coord_s->[0], y1=>$coord_s->[1],
+         x2=>$coord_t->[0], y2=>$coord_t->[1],
+         %line_style
+      );
+}
+
+sub draw_lines {
+   my ($self, $svg)=@_;
+   my $arrows=$self->source->ArrowStyle;
+   my $arrow_color= new RGB(@arrowheadcolor);
+   $arrow_color =~ tr/" "/","/;
+   if (is_code($arrows) || $arrows!=0) {
+      my $arrow_marker = $svg->defs()->marker(
+         id=>"arrow",
+         markerWidth=>$arrowheadlength,
+         markerHeight=>$arrowheadwidth,
+         refX=>$arrowheadoffset,
+         refY=>$arrowheadwidth/2,
+         orient=>"auto",
+         markerUnits=>"strokeWidth"
+      );
+      $arrow_marker->path(
+         d=>"M0,0 L0,$arrowheadwidth L$arrowheadlength," . $arrowheadwidth/2 . "z",
+         fill=>"rgb(" . "$arrow_color" . ")"
+      );
+   }
+   for (my $e=$self->source->all_edges; $e; ++$e) {
+      my $arrow = is_code($arrows) ? $arrows->($e) : $arrows;      
+      $self->draw_edge($svg,$e,$arrow);
    }
 }
 

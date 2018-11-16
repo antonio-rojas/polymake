@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -50,7 +50,7 @@ UserFunction4perl("# @category Comparing"
                   "# quadrangles."
                   "# > $p = new Polytope(POINTS=>[[1,-1,-1],[1,1,-1],[1,-1,1],[1,1,1],[1,0,0]]);"
                   "# > print isomorphic(cube(2),$p);"
-                  "# | 1",
+                  "# | true",
                   &isomorphic, "isomorphic(Cone,Cone)");
 
 UserFunction4perl("# @category Comparing"
@@ -61,7 +61,11 @@ UserFunction4perl("# @category Comparing"
                   "# If the polytopes are not isomorphic, an exception is thrown."
                   "# @param Cone P1 the first cone/polytope"
                   "# @param Cone P2 the second cone/polytope"
-                  "# @return Pair<Array<Int>, Array<Int>> the facet and the vertex permutations",
+                  "# @return Pair<Array<Int>, Array<Int>> the facet and the vertex permutations"
+                  "# @example [prefer cdd] To print the vertex permutation that maps the 3-simplex to its mirror image, type this:"
+                  "# > $p = find_facet_vertex_permutations(simplex(3),scale(simplex(3),-1));"
+                  "# > print $p->first;"
+                  "# | 1 2 3 0",
                   &find_facet_vertex_permutations, "find_facet_vertex_permutations(Cone,Cone)");
 
 Function4perl(&is_self_dual, "is_self_dual(Cone)");

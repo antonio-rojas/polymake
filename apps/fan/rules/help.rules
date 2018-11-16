@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -25,6 +25,9 @@
 
 # @topic category properties/any/Toric Varieties
 # Properties coming from associated toric varieties
+
+# @topic category functions/Finite metric spaces
+# All around Tight spans of finite metric spaces and their conections to polyhedral geometry
 
 # Local Variables:
 # mode: perl

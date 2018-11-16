@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -21,33 +21,39 @@
 
 namespace polymake { namespace polytope {
 
-perl::Object n_gon(int n, const Rational& r, perl::OptionSet options)
+perl::Object n_gon(int n, const Rational& r, const Rational& alpha_0, perl::OptionSet options)
 {
    if ((n < 3) || (r <= 0)) {
       throw std::runtime_error("n_gon: n >= 3 and r > 0 required\n");
    }
 
    perl::Object p("Polytope<Rational>");
-   p.set_description() << n << "-gon with radius " << r << endl;
+   p.set_description() << n << "-gon with radius " << r << " and initial angle " << alpha_0
+                       << (alpha_0.is_zero() ? "" : " pi") << endl;
    
    Matrix<Rational> V(n,3);
    V.col(0).fill(1);
 
-   V(0,1)=r;
+   AccurateFloat c, s;
+   sin_cos(s, c, alpha_0 * AccurateFloat::pi());
+   V(0,1)=r*c;
+   V(0,2)=r*s;
    if (!(n%2)) {
-      V(n/2,1)=-r;
+      V(n/2,1)=-V(0,1);
+      V(n/2,2)=-V(0,2);
       if (!(n%4)) {
-         V(n/4,2)=r;
-         V((3*n)/4,2)=-r;
+         V(n/4,1)=V(0,2);
+         V(n/4,2)=V(0,1);
+         V((3*n)/4,1)=-V(0,2);
+         V((3*n)/4,2)=-V(0,1);
       }
    }
 
    const int iend= n%2 ? (n+1)/2 : (n+2)/4;
    const AccurateFloat angle = (2 * AccurateFloat::pi()) / n;
-   AccurateFloat c, s;
 
    for (int i=1; i<iend; ++i) {
-      sin_cos(s, c, i*angle);
+      sin_cos(s, c, alpha_0*AccurateFloat::pi() + i*angle);
       Rational x(r*c);
       Rational y(r*s);
       V(i,1)=x;
@@ -64,11 +70,11 @@ perl::Object n_gon(int n, const Rational& r, perl::OptionSet options)
 
 
    bool group_flag = options["group"];
-   if ( group_flag ) {
-      Array< Array< int > > gens(2);
-      Array< int > gen1(n);
-      Array< int > gen2(n);
-      for ( int i=0; i<n; ++i ) { // iterating over entries
+   if (group_flag) {
+      Array<Array<int>> gens(2);
+      Array<int> gen1(n);
+      Array<int> gen2(n);
+      for (int i=0; i<n; ++i) { // iterating over entries
          gen1[n-i-1]=(i+1)%n;
          gen2[i]=(i+1)%n;
       }
@@ -82,9 +88,8 @@ perl::Object n_gon(int n, const Rational& r, perl::OptionSet options)
       perl::Object g("group::Group");
       g.set_description() << "full combinatorial group on vertices" << endl;
       g.set_name("fullCombinatorialGroupOnRays");
-      g.take("RAYS_ACTION") << a;
       p.take("GROUP") << g;
-
+      p.take("GROUP.VERTICES_ACTION") << a;
    }
 
 
@@ -102,15 +107,16 @@ UserFunction4perl("# @category Producing a polytope from scratch"
                   "# All vertices lie on a circle of radius //r//."
                   "# The radius defaults to 1."
                   "# @param Int n the number of vertices"
-                  "# @param Rational r the radius"
+                  "# @param Rational r the radius (defaults to 1)"
+                  "# @param Rational alpha_0 the initial angle divided by pi (defaults to 0)"
                   "# @option Bool group"
                   "# @return Polytope"
                   "# @example To store the regular pentagon in the variable $p and calculate its symmetry group, do this:"
                   "# > $p = n_gon(5,group=>1);"
-                  "# > print $p->GROUP->GENERATORS;"
+                  "# > print $p->GROUP->RAYS_ACTION->GENERATORS;"
                   "# | 0 4 3 2 1"
                   "# | 1 2 3 4 0",
-                  &n_gon,"n_gon($;$=1, {group=>undef})");
+                  &n_gon,"n_gon($;$=1, $=0, {group=>undef})");
 
 } }
 

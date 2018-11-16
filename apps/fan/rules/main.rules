@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -62,7 +62,7 @@ declare object SubdivisionOfVectors<Scalar=Rational> [ is_ordered_field(Scalar) 
 # @category Geometry
 # The inhomogeneous variant of [[SubdivisionOfVectors]], similar to the derivation of [[PointConfiguration]] from [[VectorConfiguration]].
 # @tparam Scalar default: [[Rational]]
-# @example To produce a regular subdivision of the vertices of a square:
+# @example [prefer cdd] To produce a regular subdivision of the vertices of a square:
 # > $c=new SubdivisionOfPoints(POINTS=>polytope::cube(2)->VERTICES,WEIGHTS=>[0,0,0,1]);
 # > print $c->MAXIMAL_CELLS;
 # | {0 1 2}
@@ -83,9 +83,11 @@ INCLUDE
   subdivision.rules
   visual.rules
   lattice.rules
-  symmetric_fan.rules
   gfan.rules
-
+  splitstree.rules
+  action.rules
+  symmetric_fan.rules
+  voronoi.rules
 
 # Local Variables:
 # mode: perl

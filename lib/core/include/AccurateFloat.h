@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -90,7 +90,13 @@ public:
       mpfr_urandom(this, rnd, MPFR_RNDZ);
    }
 
-   /// Construct an infinte value with the given sign
+   /// Copy the value from a third party
+   explicit AccurateFloat(const __mpfr_struct& b)
+   {
+      mpfr_set(this, &b, MPFR_RNDN);
+   }
+
+   /// Construct an infinite value with the given sign
    static
    AccurateFloat infinity(int s)
    {
@@ -176,6 +182,11 @@ public:
    explicit operator double() const
    {
       return mpfr_get_d(this, MPFR_RNDN);
+   }
+
+   explicit operator int() const
+   {
+      return mpfr_get_si(this, MPFR_RNDN);
    }
 
    AccurateFloat& set_random(gmp_randstate_t rnd)
@@ -1049,6 +1060,36 @@ public:
    }
 
    friend
+   int round(const AccurateFloat& a, bool& was_integer, mpfr_rnd_t rnd=MPFR_RNDN)
+   {
+      AccurateFloat rounded;
+      const int result = mpfr_rint(&rounded, &a, rnd);
+      if (result == 1 || result == -1) {
+         std::ostringstream oss;
+         wrap(oss) << "AccurateFloat " << a << " not representable as an integer";
+         throw std::runtime_error(oss.str());
+      }
+      was_integer = !result;
+      return int(rounded);
+   }
+
+   friend
+   AccurateFloat rounded_if_integer(const AccurateFloat& a, double prec=1e-10, mpfr_rnd_t rnd=MPFR_RNDN)
+   {
+      AccurateFloat rounded;
+      const int result = mpfr_rint(&rounded, &a, rnd);
+      if (result == 1 || result == -1) {
+         std::ostringstream oss;
+         wrap(oss) << "AccurateFloat " << a << " not representable as an integer";
+         throw std::runtime_error(oss.str());
+      }
+      if (result == 0 || abs(a-rounded) <= prec)
+         return rounded;
+      else
+         return a;
+   }
+
+   friend
    AccurateFloat abs(const AccurateFloat& a)
    {
       AccurateFloat result;
@@ -1401,12 +1442,12 @@ public:
       return std::move(a);
    }
 
-   int compare(const AccurateFloat& b) const
+   int compare(const AccurateFloat& b) const noexcept
    {
       return mpfr_cmp(this, &b);
    }
 
-   int compare(const Integer& b) const
+   int compare(const Integer& b) const noexcept
    {
       const int s1=isinf(*this), s2=isinf(b);
       if (__builtin_expect(s1 || s2, 0)) {
@@ -1415,7 +1456,7 @@ public:
       return mpfr_cmp_z(this, &b);
    }
 
-   int compare(const Rational& b) const
+   int compare(const Rational& b) const noexcept
    {
       const int s1=isinf(*this), s2=isinf(b);
       if (__builtin_expect(s1 || s2, 0)) {
@@ -1424,17 +1465,17 @@ public:
       return mpfr_cmp_q(this, &b);
    }
 
-   int compare(long b) const
+   int compare(long b) const noexcept
    {
       return mpfr_cmp_si(this, b);
    }
 
-   int compare(int b) const
+   int compare(int b) const noexcept
    {
       return compare(long(b));
    }
 
-   int compare(double b) const
+   int compare(double b) const noexcept
    {
       return mpfr_cmp_d(this, b);
    }
@@ -1485,7 +1526,7 @@ public:
    template <typename T>
    friend
    typename std::enable_if<mlist_contains<is_comparable_with, T>::value, bool>::type
-   operator== (const AccurateFloat& a, const T& b)
+   operator== (const AccurateFloat& a, const T& b) noexcept
    {
       return a.compare(b)==0;
    }
@@ -1493,7 +1534,7 @@ public:
    template <typename T>
    friend
    typename std::enable_if<mlist_contains<is_comparable_with, T>::value, bool>::type
-   operator== (const T& a, const AccurateFloat& b)
+   operator== (const T& a, const AccurateFloat& b) noexcept
    {
       return b==a;
    }
@@ -1501,7 +1542,7 @@ public:
    template <typename T>
    friend
    typename std::enable_if<mlist_contains<is_comparable_with, T>::value, bool>::type
-   operator!= (const AccurateFloat& a, const T& b)
+   operator!= (const AccurateFloat& a, const T& b) noexcept
    {
       return !(a==b);
    }
@@ -1509,7 +1550,7 @@ public:
    template <typename T>
    friend
    typename std::enable_if<mlist_contains<is_comparable_with, T>::value, bool>::type
-   operator!= (const T& a, const AccurateFloat& b)
+   operator!= (const T& a, const AccurateFloat& b) noexcept
    {
       return !(b==a);
    }
@@ -1517,7 +1558,7 @@ public:
    template <typename T>
    friend
    typename std::enable_if<mlist_contains<is_comparable_with, T>::value, bool>::type
-   operator< (const AccurateFloat& a, const T& b)
+   operator< (const AccurateFloat& a, const T& b) noexcept
    {
       return a.compare(b)<0;
    }
@@ -1525,7 +1566,7 @@ public:
    template <typename T>
    friend
    typename std::enable_if<mlist_contains<is_comparable_with, T>::value, bool>::type
-   operator< (const T& a, const AccurateFloat& b)
+   operator< (const T& a, const AccurateFloat& b) noexcept
    {
       return b>a;
    }
@@ -1533,7 +1574,7 @@ public:
    template <typename T>
    friend
    typename std::enable_if<mlist_contains<is_comparable_with, T>::value, bool>::type
-   operator> (const AccurateFloat& a, const T& b)
+   operator> (const AccurateFloat& a, const T& b) noexcept
    {
       return a.compare(b)>0;
    }
@@ -1541,7 +1582,7 @@ public:
    template <typename T>
    friend
    typename std::enable_if<mlist_contains<is_comparable_with, T>::value, bool>::type
-   operator> (const T& a, const AccurateFloat& b)
+   operator> (const T& a, const AccurateFloat& b) noexcept
    {
       return b<a;
    }
@@ -1549,7 +1590,7 @@ public:
    template <typename T>
    friend
    typename std::enable_if<mlist_contains<is_comparable_with, T>::value, bool>::type
-   operator<= (const AccurateFloat& a, const T& b)
+   operator<= (const AccurateFloat& a, const T& b) noexcept
    {
       return a.compare(b)<=0;
    }
@@ -1557,7 +1598,7 @@ public:
    template <typename T>
    friend
    typename std::enable_if<mlist_contains<is_comparable_with, T>::value, bool>::type
-   operator<= (const T& a, const AccurateFloat& b)
+   operator<= (const T& a, const AccurateFloat& b) noexcept
    {
       return b>=a;
    }
@@ -1565,7 +1606,7 @@ public:
    template <typename T>
    friend
    typename std::enable_if<mlist_contains<is_comparable_with, T>::value, bool>::type
-   operator>= (const AccurateFloat& a, const T& b)
+   operator>= (const AccurateFloat& a, const T& b) noexcept
    {
       return a.compare(b)>=0;
    }
@@ -1573,13 +1614,13 @@ public:
    template <typename T>
    friend
    typename std::enable_if<mlist_contains<is_comparable_with, T>::value, bool>::type
-   operator>= (const T& a, const AccurateFloat& b)
+   operator>= (const T& a, const AccurateFloat& b) noexcept
    {
       return b<=a;
    }
 
    friend
-   bool abs_equal(const AccurateFloat& a, const AccurateFloat& b)
+   bool abs_equal(const AccurateFloat& a, const AccurateFloat& b) noexcept
    {
       return !mpfr_cmpabs(&a, &b);
    }
@@ -1592,6 +1633,16 @@ public:
       a.putstr(os, os.flags());
       return os;
    }
+
+   void read(std::istream& is);
+
+   friend
+   std::istream& operator>> (std::istream& is, AccurateFloat& a)
+   {
+      a.read(is);
+      return is;
+   }
+
 
 #if POLYMAKE_DEBUG
    void dump() const __attribute__((used)) { std::cerr << *this << std::flush; }
@@ -1678,26 +1729,25 @@ protected:
    friend class Rational;
 };
 
-}
-namespace std {
-
-inline
-void swap(pm::AccurateFloat& a, pm::AccurateFloat& b)
-{
-   a.swap(b);
-}
-
 template <>
-class numeric_limits<pm::AccurateFloat> : public numeric_limits<pm::Rational> {
-public:
-   static const bool is_exact = false;
-   static pm::AccurateFloat min() { return pm::AccurateFloat::infinity(-1); }
-   static pm::AccurateFloat max() { return pm::AccurateFloat::infinity(1); }
-   static pm::AccurateFloat infinity() { return max(); }
-};
+struct spec_object_traits<AccurateFloat>
+   : spec_object_traits<is_scalar> {
 
-}
-namespace pm {
+   static
+   bool is_zero(const AccurateFloat& a)
+   {
+      return a.is_zero();
+   }
+
+   static
+   bool is_one(const AccurateFloat& a)
+   {
+      return a==1;
+   }
+
+   static const AccurateFloat& zero();
+   static const AccurateFloat& one();
+};
 
 inline
 bool isfinite(const AccurateFloat& a) noexcept
@@ -1723,10 +1773,34 @@ struct algebraic_traits<AccurateFloat> {
    typedef AccurateFloat field_type;
 };
 
+template <>
+AccurateFloat
+pow(const AccurateFloat& base, long exp);
+
+}
+namespace std {
+
+inline
+void swap(pm::AccurateFloat& a, pm::AccurateFloat& b)
+{
+   a.swap(b);
+}
+
+template <>
+class numeric_limits<pm::AccurateFloat> : public numeric_limits<pm::Rational> {
+public:
+   static const bool is_exact = false;
+   static pm::AccurateFloat min() { return pm::AccurateFloat::infinity(-1); }
+   static pm::AccurateFloat max() { return pm::AccurateFloat::infinity(1); }
+   static pm::AccurateFloat infinity() { return max(); }
+};
+
+}
+namespace pm {
 namespace operations {
 
 template <>
-struct cmp_scalar<AccurateFloat, AccurateFloat, true> : cmp_GMP_based<AccurateFloat> {};
+struct cmp_scalar<AccurateFloat, AccurateFloat, void> : cmp_GMP_based<AccurateFloat> {};
 
 } }
 namespace polymake {

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -24,7 +24,7 @@ namespace polymake { namespace common {
 template <typename Vector> inline
 bool check_int_limit(const GenericVector<Vector,Integer>& V)
 {
-   for (typename Entire<Vector>::const_iterator x=entire(V.top()); !x.at_end(); ++x)
+   for (auto x=entire(V.top()); !x.at_end(); ++x)
       if ( *x > std::numeric_limits<int>::max() || *x < std::numeric_limits<int>::min() ) 
          return false;
    return true;

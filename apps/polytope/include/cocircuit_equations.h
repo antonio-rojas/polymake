@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -25,7 +25,7 @@
 #include "polymake/common/lattice_tools.h"
 #include "polymake/group/representations.h"
 #include "polymake/group/isotypic_components.h"
-#include "polymake/group/action_datatypes.h"
+#include "polymake/group/action.h"
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -52,14 +52,15 @@ class CocircuitEquation {
    CocircuitEquationType cce;
 
 public:
-   CocircuitEquation() {}
+   CocircuitEquation() = default;
 
-   inline
-   void set (const SetType& facet, int sigma) {
+   void set(const SetType& facet, int sigma)
+   {
       cce[facet] = sigma;
    }
 
-   CocircuitEquationType equation() const {
+   const CocircuitEquationType& equation() const
+   {
       return cce;
    }
 };
@@ -71,32 +72,33 @@ class CocircuitEquation<SparseVector<int>, SetType> {
    const IndexOfType<SetType>& index_of;
 
  public:
-   CocircuitEquation(const IndexOfType<SetType>& index_of)
-      : cce(index_of.size())
-      , index_of(index_of) 
+   CocircuitEquation(const IndexOfType<SetType>& index_of_)
+      : cce(index_of_.size())
+      , index_of(index_of_)
    {}
-   
-   inline
-   void set (const SetType& facet, int sigma) {
+
+   void set(const SetType& facet, int sigma)
+   {
       cce[index_of.at(facet)] = sigma;
    }
 
-   SparseVector<int> equation() const {
+   const SparseVector<int>& equation() const
+   {
       return cce;
    }
 };
 
 // the following function implements the calculation of the cocircuit
 // equation corresponding to a given ridge. It is templated on the
-// desired data type. 
-template<typename Scalar, typename SetType, typename CocircuitEquationType>
+// desired data type.
+template <typename Scalar, typename SetType, typename CocircuitEquationType>
 void
-cocircuit_equation_of_ridge_impl_impl(const Matrix<Scalar>& points, 
+cocircuit_equation_of_ridge_impl_impl(const Matrix<Scalar>& points,
                                       const SetType& ridge,
                                       CocircuitEquationType& eq) {
    const SparseVector<Scalar> nv = null_space(points.minor(ridge, All)).row(0);
-   int row_index(0); 
-   for (typename Entire<Rows<Matrix<Scalar> > >::const_iterator vit = entire(rows(points)); !vit.at_end(); ++vit, ++row_index) {
+   int row_index(0);
+   for (auto vit = entire(rows(points)); !vit.at_end(); ++vit, ++row_index) {
       const int sigma = sign(nv * (*vit));
       if (sigma != 0) {
          SetType facet(ridge);
@@ -109,7 +111,7 @@ cocircuit_equation_of_ridge_impl_impl(const Matrix<Scalar>& points,
 // next, the two variants that are supposed to be called from other functions.
 template<typename Scalar, typename SetType>
 auto
-cocircuit_equation_of_ridge_impl(const Matrix<Scalar>& points, 
+cocircuit_equation_of_ridge_impl(const Matrix<Scalar>& points,
                                  const SetType& ridge,
                                  const IndexOfType<SetType>& index_of)
 {
@@ -120,7 +122,7 @@ cocircuit_equation_of_ridge_impl(const Matrix<Scalar>& points,
 
 template<typename Scalar, typename SetType>
 auto
-cocircuit_equation_of_ridge_impl(const Matrix<Scalar>& points, 
+cocircuit_equation_of_ridge_impl(const Matrix<Scalar>& points,
                                  const SetType& ridge)
 {
    CocircuitEquation<group::SparseSimplexVector<SetType>, SetType> eq;
@@ -129,21 +131,21 @@ cocircuit_equation_of_ridge_impl(const Matrix<Scalar>& points,
 }
 
 } // end anonymous namespace
-   
+
 template<typename Scalar, typename SetType>
-ListMatrix<SparseVector<int>> 
-cocircuit_equations_impl(int d, 
-                         const Matrix<Scalar>& points, 
-                         const IncidenceMatrix<>& VIF, 
-                         const Array<SetType>& interior_ridge_simplices, 
-                         const Array<SetType>& interior_simplices, 
+ListMatrix<SparseVector<int>>
+cocircuit_equations_impl(int d,
+                         const Matrix<Scalar>& points,
+                         const IncidenceMatrix<>& VIF,
+                         const Array<SetType>& interior_ridge_simplices,
+                         const Array<SetType>& interior_simplices,
                          perl::OptionSet options)
 {
    const bool reduce_rows = options["reduce_rows"];
    const int log_frequency = options["log_frequency"];
    const std::string filename = options["filename"];
    std::ofstream outfile(filename.c_str(), std::ios_base::trunc);
-   
+
    int n_facets = 0;
    IndexOfType<SetType> index_of;
    for (const auto& s : interior_simplices)
@@ -175,7 +177,7 @@ foldable_cocircuit_equations_impl(int d,
                                   const Matrix<Scalar>& points,
                                   const IncidenceMatrix<>& VIF,
                                   const Array<SetType>& interior_ridge_simplices, // FIXME: Map
-                                  const Array<SetType>& interior_simplices,
+                                  const Array<SetType>& max_interior_simplices,
                                   perl::OptionSet options,
                                   bool partial_equations)
 {
@@ -183,10 +185,10 @@ foldable_cocircuit_equations_impl(int d,
    const int log_frequency = options["log_frequency"];
    const std::string filename = options["filename"];
    std::ofstream outfile(filename.c_str(), std::ios_base::trunc);
-   
+
    IndexOfType<SetType> index_of;
    int n_facets = 0; // number of full-dimensional simplices
-   for (const auto& s : interior_simplices)
+   for (const auto& s: max_interior_simplices)
       index_of[s] = n_facets++;
 
    ListMatrix<SparseVector<int>> cocircuit_eqs(0, 2*n_facets);
@@ -199,16 +201,16 @@ foldable_cocircuit_equations_impl(int d,
    time(&start_time);
    // for each interior ridge rho and c in {0,1}:
    //   sum_{sigma > rho, orientation=+} x_{c,sigma} = sum_{sigma > rho, orientation=-} x_{1-c,sigma}
-   for (const auto& ir : interior_ridge_simplices) {
+   for (const auto& ir: interior_ridge_simplices) {
       if (log_frequency && (++ct % log_frequency == 0)) {
          time(&current_time);
          cerr << ct << " " << difftime(current_time, start_time) << endl;
       }
       eq_0_first = SparseVector<int>(2*n_facets);
-      eq_1_first = SparseVector<int>(2*n_facets); 
+      eq_1_first = SparseVector<int>(2*n_facets);
       const SparseVector<Scalar> nv = null_space(points.minor(ir, All)).row(0);
-      int row_index(0); 
-      for (typename Entire<Rows<Matrix<Scalar> > >::const_iterator vit = entire(rows(points)); !vit.at_end(); ++vit, ++row_index) {
+      int row_index(0);
+      for (auto vit = entire(rows(points)); !vit.at_end(); ++vit, ++row_index) {
          const int orientation = sign(nv * (*vit));
          if (orientation != 0) {
             const SetType this_facet(ir + scalar2set(row_index));
@@ -223,16 +225,15 @@ foldable_cocircuit_equations_impl(int d,
             }
          }
       }
-      if (eq_0_first.size()) {
-         if (reduce_rows) {
-            eq_0_first = common::divide_by_gcd(eq_0_first);
-            eq_1_first = common::divide_by_gcd(eq_1_first);
-         }
-         cocircuit_eqs /= eq_0_first;
-         cocircuit_eqs /= eq_1_first;
-         if (filename.size())
-            wrap(outfile) << eq_0_first << "\n" << eq_1_first << endl;
+      if (!eq_0_first.size()) continue;
+      if (reduce_rows) {
+         eq_0_first = common::divide_by_gcd(eq_0_first);
+         eq_1_first = common::divide_by_gcd(eq_1_first);
       }
+      cocircuit_eqs /= eq_0_first;
+      cocircuit_eqs /= eq_1_first;
+      if (filename.size())
+         wrap(outfile) << eq_0_first << "\n" << eq_1_first << endl;
    }
    return cocircuit_eqs;
 }
@@ -246,5 +247,3 @@ foldable_cocircuit_equations_impl(int d,
 // c-basic-offset:3
 // indent-tabs-mode:nil
 // End:
-
- 

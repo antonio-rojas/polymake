@@ -1,0 +1,98 @@
+#  Copyright (c) 1997-2018
+#  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
+#  http://www.polymake.org
+#
+#  This program is free software; you can redistribute it and/or modify it
+#  under the terms of the GNU General Public License as published by the
+#  Free Software Foundation; either version 2, or (at your option) any
+#  later version: http://www.gnu.org/licenses/gpl.txt.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#-------------------------------------------------------------------------------
+
+# Create a polyhedral model of the harnack curve of given degree.
+# @param Int deg the degree of the curve
+# @return fan::PolyhedralComplex
+user_function harnack_curve( Int ) {
+  my $n = shift;
+  my @monoms;
+  my @weights;
+  my @signs;
+  # my $count = 0;
+  foreach my $i (0 .. $n) {
+    foreach my $j (0 .. $n-$i) {
+      # $weights[$count] = ($i*$j+$i*$i+$j*$j);
+      # $monoms[$count] = [$n-$i-$j, $i, $j];
+      # $signs[$count] = ($i*$j+$i+$j)%2;
+      # $count++;
+      push @weights, ($i*$j+$i*$i+$j*$j);
+      push @monoms, [$n-$i-$j, $i, $j];
+      push @signs, ($i*$j+$i+$j)%2;
+    }
+  }
+
+  my $m = new Matrix<Int>(\@monoms);
+  my $c = new Vector<TropicalNumber<Min>>(\@weights);
+  my $s = new Vector<Bool>(\@signs);
+  my $h = new Hypersurface<Min>(MONOMIALS=>$m, COEFFICIENTS=>$c);
+  return $h->REAL_PART(SIGNS=>$s)->realize("barycenter");
+}
+
+# Create a counterexample to the Ragsdale conjecture
+# @return fan::PolyhedralComplex
+user_function ragsdale_counterexample {
+  my $monoms = [
+    [10, 0, 0], [9, 1, 0], [8, 2, 0], [7, 3, 0], [6, 4, 0], [5, 5, 0], [4, 6, 0], [3, 7, 0], [2, 8, 0], [1, 9, 0], [0, 10, 0],
+    [ 9, 0, 1], [8, 1, 1], [7, 2, 1], [6, 3, 1], [5, 4, 1], [4, 5, 1], [3, 6, 1], [2, 7, 1], [1, 8, 1], [0, 9, 1],
+    [ 8, 0, 2], [7, 1, 2], [6, 2, 2], [5, 3, 2], [4, 4, 2], [3, 5, 2], [2, 6, 2], [1, 7, 2], [0, 8, 2],
+    [ 7, 0, 3], [6, 1, 3], [5, 2, 3], [4, 3, 3], [3, 4, 3], [2, 5, 3], [1, 6, 3], [0, 7, 3],
+    [ 6, 0, 4], [5, 1, 4], [4, 2, 4], [3, 3, 4], [2, 4, 4], [1, 5, 4], [0, 6, 4],
+    [ 5, 0, 5], [4, 1, 5], [3, 2, 5], [2, 3, 5], [1, 4, 5], [0, 5, 5],
+    [ 4, 0, 6], [3, 1, 6], [2, 2, 6], [1, 3, 6], [0, 4, 6],
+    [ 3, 0, 7], [2, 1, 7], [1, 2, 7], [0, 3, 7],
+    [ 2, 0, 8], [1, 1, 8], [0, 2, 8],
+    [ 1, 0, 9], [0, 1, 9],
+    [ 0, 0, 10]
+  ];
+  my $weights = [
+    224, 142, 76,  12,  76, 142, 224, 311, 401, 494, 600,
+    144, 58,  22,  6,   22, 58,  144, 232, 324, 419,
+    66,  34,  10,  2,   10, 34,  66,  156, 250,
+    48,  18,  2,   0,   2,  18,  48,  140,
+    66,  34,  10,  2,   10, 34,  68,
+    144, 58,  22,  6,   22, 55,
+    224, 142, 76,  12,  44,
+    310, 232, 167, 104,
+    402, 326, 262,
+    498, 424,
+    600
+  ];
+  my $signs = [
+    1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1,
+    0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 1, 0, 1,
+    0, 0, 1, 1, 1, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 1,
+    0, 0, 0, 1, 0, 0,
+    1, 0, 1, 0, 1,
+    0, 0, 0, 0,
+    1, 0, 1,
+    0, 0,
+    1
+  ];
+
+  my $m = new Matrix<Int>($monoms);
+  my $c = new Vector<TropicalNumber<Min>>($weights);
+  my $s = new Vector<Bool>($signs);
+  my $h = new Hypersurface<Min>(MONOMIALS=>$m, COEFFICIENTS=>$c);
+  return $h->REAL_PART(SIGNS=>$s)->realize("barycenter");
+}
+
+# Local Variables:
+# mode: perl
+# cperl-indent-level:3
+# indent-tabs-mode:nil
+# End:

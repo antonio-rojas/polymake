@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -36,14 +36,14 @@ perl::Object zonotope_tiling_lattice(perl::Object P, perl::OptionSet options)
       b = dehomogenize(_b);
 
    Matrix<E> lattice_gens(VIF.rows(), emb_d); 
-   typename Entire<Rows<Matrix<E> > >::iterator rlit = entire(rows(lattice_gens));
-   for (Entire<Rows<IncidenceMatrix<> > >::const_iterator rit = entire(rows(VIF)); !rit.at_end(); ++rit, ++rlit) {
+   auto rlit = entire(rows(lattice_gens));
+   for (auto rit = entire(rows(VIF)); !rit.at_end(); ++rit, ++rlit) {
       const Set<int> vif(*rit);
       const Vector<E> facet_barycenter = dehomogenize(ones_vector<E>(vif.size()) * V.minor(vif, All)); 
       *rlit = zero_vector<E>(1) | (2 * (facet_barycenter - b)); 
    }
 
-   perl::Object L(perl::ObjectType::construct<E>("AffineLattice"));
+   perl::Object L("AffineLattice", mlist<E>());
 
    const bool lattice_origin_is_vertex = options["lattice_origin_is_vertex"];
    if (lattice_origin_is_vertex)
@@ -66,7 +66,7 @@ UserFunctionTemplate4perl("# @category Geometry"
                           "# @param Polytope P the zonotope"
                           "# @option Bool lattice_origin_is_vertex true if the origin of the tiling lattice should be a vertex of P; default false, ie, the origin will be the barycenter of P"
                           "# @return AffineLattice"
-                          "# @example This determines a tiling lattice for a parallelogram with the origin as its vertex barycenter and prints it base vectors:"
+                          "# @example [prefer cdd] This determines a tiling lattice for a parallelogram with the origin as its vertex barycenter and prints it base vectors:"
                           "# > $M = new Matrix([[1,1,0],[1,1,1]]);"
                           "# > $p = zonotope($M);"
                           "# > $A = zonotope_tiling_lattice($p);"

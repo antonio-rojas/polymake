@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -33,7 +33,8 @@ Map<Rational, Rational> sum_of_square_roots_naive(const Array<Rational>& a)
 
    // Now start the summation, counting how many equal values there are in a row
    Map<Rational, Rational> coefficient_of_sqrt;
-   Entire<Array<Rational> >::const_iterator a1 = entire(sorted_a), a2 = a1;
+   auto a1 = entire(sorted_a);
+   auto a2 = a1;
    while (!a2.at_end()) {
       int multiplicity(1); 
       ++a2;
@@ -52,12 +53,14 @@ Map<Rational, Rational> sum_of_square_roots_naive(const Array<Rational>& a)
 }
 
 UserFunction4perl("# @category Arithmetic"
-		  "# Make a naive attempt to sum the square roots of the entries"
-		  "# of the input array."
-		  "# @param Array<Rational> a list of rational numbers (other coefficents are not implemented)."
-		  "# @return Map<Rational, Rational> coefficient_of_sqrt a map collecting the coefficients of various roots encountered in the sum."
-		  "# For example, {(3 1/2),(5 7)} represents sqrt{3}/2 + 7 sqrt{5}." 
-		  "# If the output is not satisfactory, please use a symbolic algebra package.",
+		  "# Make a naive attempt to sum the square roots of the entries of the input array."
+		  "# @param Array<Rational> input_array a list of rational numbers (other coefficents are not implemented)."
+		  "# @return Map<Rational, Rational> a map collecting the coefficients of roots encountered in the sum."
+		  "# @example To obtain sqrt{3/4} + sqrt{245}, type"
+                  "# > print sum_of_square_roots_naive(new Array<Rational>([3/4, 245]));"
+                  "# | {(3 1/2) (5 7)}"
+                  "# This output represents sqrt{3}/2 + 7 sqrt{5}." 
+		  "# If you are not satisfied with the result, please use a symbolic algebra package.",
 		  &sum_of_square_roots_naive, "sum_of_square_roots_naive(Array<Rational>)");
 
 } }

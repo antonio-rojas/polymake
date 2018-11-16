@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -29,7 +29,7 @@ namespace {
 template <typename Coord>
 Array<perl::Object> construct_cones(const IncidenceMatrix<>& max_cones, const Matrix<Coord>& rays, const Matrix<Coord>& lin_space, const int ambient_dim)
 {
-   perl::ObjectType cone_type=perl::ObjectType::construct<Coord>("Cone");
+   perl::ObjectType cone_type("Cone", mlist<Coord>());
 
    const int size = max_cones.rows();
 
@@ -106,7 +106,7 @@ perl::Object common_refinement(perl::Object f1, perl::Object f2)
                }
             }
             Set<int> new_cone;
-            for (Entire<sequence>::const_iterator j=entire(sequence(0,index)); !j.at_end(); ++j)
+            for (auto j=entire(sequence(0,index)); !j.at_end(); ++j)
                if (ray_indices[*j]>=0) new_cone.insert(ray_indices[*j]);
             if (inters_dim > 0 || empty_not_yet_there){
                new_max_cones.push_back(new_cone);

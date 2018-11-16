@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -21,11 +21,11 @@ object Polytope {
 # @example The following checks a 3-dimensional cube for edge orientability:
 # > $p = cube(3);
 # > print $p->EDGE_ORIENTABLE;
-# | 1
+# | true
 # @example A 3-dimensinal cube with one stacked facet is still 2-cubical. Therefore we can check for edge orientability:
 # > $p = stack(cube(3),5);
 # > print $p->EDGE_ORIENTABLE;
-# | 1
+# | true
 
 property EDGE_ORIENTABLE : Bool;
 
@@ -68,11 +68,13 @@ property MOEBIUS_STRIP_EDGES : Matrix<Int>;
 property MOEBIUS_STRIP_QUADS : Matrix<Int>;
 
 
-rule EDGE_ORIENTABLE, EDGE_ORIENTATION, MOEBIUS_STRIP_EDGES : CUBICALITY, HASSE_DIAGRAM {
+rule EDGE_ORIENTABLE, EDGE_ORIENTATION, MOEBIUS_STRIP_EDGES : \
+     CUBICALITY, HASSE_DIAGRAM.ADJACENCY, HASSE_DIAGRAM.DECORATION, HASSE_DIAGRAM.INVERSE_RANK_MAP, HASSE_DIAGRAM.TOP_NODE, HASSE_DIAGRAM.BOTTOM_NODE {
    edge_orientable($this);
 }
 
-rule MOEBIUS_STRIP_EDGES : MOEBIUS_STRIP_QUADS, HASSE_DIAGRAM {
+rule MOEBIUS_STRIP_EDGES : MOEBIUS_STRIP_QUADS, \
+     HASSE_DIAGRAM.ADJACENCY, HASSE_DIAGRAM.DECORATION, HASSE_DIAGRAM.INVERSE_RANK_MAP, HASSE_DIAGRAM.TOP_NODE, HASSE_DIAGRAM.BOTTOM_NODE {
   $this->MOEBIUS_STRIP_EDGES=validate_moebius_strip_quads($this);
 }
 

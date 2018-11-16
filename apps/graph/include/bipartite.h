@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -53,7 +53,7 @@ Vector<int> bipartite_coloring(const GenericGraph<Graph,Undirected>& G)
       new_nodes -= n;
       const Set<int> neighbors = G.top().adjacent_nodes(n) * new_nodes;
       const bool color = color_of[n];
-      for (Entire<Set<int> >::const_iterator sit = entire(neighbors); !sit.at_end(); ++sit) {
+      for (auto sit = entire(neighbors); !sit.at_end(); ++sit) {
          queue.push_back(*sit);
          if (color_of[*sit] != 2 && color_of[*sit] != !color)
             throw std::runtime_error("Graph is not bipartite");

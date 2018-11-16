@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -102,7 +102,8 @@ UserFunctionTemplate4perl("# @category Consistency check"
                   "# > print check_inc(cube(2)->VERTICES,$H,'0',1);"
                   "# | <1,0>   ( 1 1 -1 ) * [ 1 1 0 ] == 2"
                   "# | <3,0>   ( 1 1 1 ) * [ 1 1 0 ] == 2"
-                  "# | number of points==4, number of hyperplanes==1, -:0, 0:2, +:2, total:4"
+                  "# | \\#points==4, \\#hyperplanes==1, -:0, 0:2, +:2, total:4"
+                  "# | false"
                   "# Thus, the first and third vertex don't lie on the hyperplane defined by the facet"
                   "# but on the positive side of it, and the remaining two lie on the hyperplane.",
                   "check_inc<Scalar>(Matrix<type_upgrade<Scalar>> Matrix<type_upgrade<Scalar>> $; $=0)");

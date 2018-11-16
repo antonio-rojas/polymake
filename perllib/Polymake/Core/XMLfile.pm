@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2016
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -19,9 +19,16 @@ require Cwd;
 
 use strict;
 use namespaces;
+use warnings qw(FATAL void syntax misc);
 use feature 'state';
 
+# XML namespaces
 my $pmns="http://www.math.tu-berlin.de/polymake/#3";
+my $RelaxNGns="http://relaxng.org/ns/structure/1.0";
+my $W3CSchemaDatatypes="http://www.w3.org/2001/XMLSchema-datatypes";
+
+# should be 8 characters long, as the regular ones
+my $always_valid_checksum="*always*";
 
 my $suppress_auto_save=0;
 
@@ -45,12 +52,10 @@ use Polymake::Struct (
    '@cur_value',
    '$text',
    '@cols',
-   '@instance_by_id',
-   [ '$last_id' => 'undef' ],
+   '@ext',
    '@transforms',
    [ '$doc_tree' => 'undef' ],
    [ '$chk' => 'undef' ],
-   '@ext',
 );
 
 declare $force_verification;
@@ -59,7 +64,7 @@ declare $reject_unknown_properties=0;
 #############################################################################################
 my ($core_transforms, %ext_transforms);
 
-package _::Transform;
+package Polymake::Core::XMLreader::Transform;
 
 use Polymake::Struct (
    [ new => '$$$' ],
@@ -77,7 +82,7 @@ sub init {
 }
 
 #############################################################################################
-package __;
+package Polymake::Core::XMLreader;
 
 use XML::LibXML::Reader;
 
@@ -111,13 +116,14 @@ sub apply_transforms {
    provide_ext($self, $_->getAttribute("ext"))
      for $XPath->findnodes('p:property[@ext] | p:object[@ext] | p:attachment[@ext]', $self->doc_tree->documentElement);
 
+   my $verbose= $Verbose::files && defined($self->filename);
    foreach my $tr (@{$self->transforms}) {
       $tr->doc_tree //= do {
          $tr->in_ext && set_search_path([ "$InstallTop/xml" ]);
          $XSLT->parse_stylesheet_file($tr->filename);
       };
-      dbg_print( "transforming ", $self->filename || "<input string>", " with ",
-                 $tr->in_ext ? $tr->filename : ($tr->filename =~ $filename_re)[0] ) if $Verbose::files;
+      dbg_print( "transforming ", $self->filename, " with ",
+                 $tr->in_ext ? $tr->filename : ($tr->filename =~ $filename_re)[0] ) if $verbose;
       $self->doc_tree=$tr->doc_tree->transform($self->doc_tree);
    }
 
@@ -131,8 +137,6 @@ sub reset_data {
    @{$self->cur_proto}=();
    @{$self->cur_property}=();
    @{$self->cur_value}=();
-   @{$self->instance_by_id}=();
-   undef $self->last_id;
 }
 #############################################################################################
 sub create_doc_tree {
@@ -147,19 +151,21 @@ sub create_doc_tree {
          seek($self->source, 0, 0);
          $parser=new XML::LibXML();
          $parser->parse_fh($self->source);
-      } else {
+      } elsif (ref($self->source) eq "SCALAR") {
          $parser=new XML::LibXML();
          $parser->parse_string(${$self->source});
+      } else {
+         die "XMLreader: can't rewind an input stream\n";
       }
    }
 }
 #############################################################################################
 my %open=( object => \&open_object,  property => \&open_property,
-           v => \&open_v, m => \&open_m, e => \&open_e, t => \&open_t, r => \&open_r,
+           v => \&open_v, m => \&open_m, e => \&open_e, t => \&open_t,
            attachment => \&open_attachment, description => \&open_description, credit => \&open_credit );
 
 my %close=( object => \&close_object, data => \&close_data, property => \&close_property,
-            v => \&close_tv, m => \&close_m, e => \&close_e, t => \&close_tv,
+            v => \&close_v, m => \&close_m, e => \&close_e, t => \&close_t,
             attachment => \&close_attachment, description => \&close_description, credit => \&close_credit );
 
 sub parse {
@@ -171,8 +177,13 @@ sub parse {
       last if ($nodeType=$parser->nodeType) == XML_READER_TYPE_ELEMENT;
       if ($nodeType == XML_READER_TYPE_PROCESSING_INSTRUCTION) {
          if ($parser->name eq "pm") {
-            if (!$force_verification && $parser->value =~ /\bchk="([[:xdigit:]]+)"/) {
-               $self->chk=hex($1);
+            if (!$force_verification) {
+               if ($parser->value =~ /\bchk="([[:xdigit:]]+)"/) {
+                  $self->chk=hex($1);
+               } elsif ($parser->value =~ /\b\Qchk="$always_valid_checksum"\E/o &&
+                        $self->filename =~ m{/test(?:suite|scenarios)/}) {
+                  $self->chk=$always_valid_checksum;
+               }
             }
          }
       }
@@ -224,10 +235,10 @@ sub parse {
       verify_integrity($self);
    }
    if (!$self->trusted) {
-      state $rngschema=new XML::LibXML::RelaxNG(location => $InstallTop."/xml/datafile.rng");
-      my $verbose= $Verbose::files && defined $self->filename && !defined($self->doc_tree);
+      my $verbose= $Verbose::files && defined($self->filename) && !defined($self->doc_tree);
       dbg_print( "validating XML file ", $self->filename ) if $verbose;
       create_doc_tree($self, $parser);
+      state $rngschema=new XML::LibXML::RelaxNG(location => $InstallTop."/xml/datafile.rng");
       $rngschema->validate($self->doc_tree);
       dbg_print( "XML validation succeeded" ) if $verbose;
       $PropertyType::trusted_value=0;
@@ -261,7 +272,7 @@ sub parse {
       } else {
          $is_object and die "top-level element must be `data'\n";
          if (defined (my $value=$attrs->{value})) {
-            push @{$self->cur_value}, [ downgradeUTF8($value) ];
+            push @{$self->cur_value}, [ $value ];
          } else {
             push @{$self->cur_value}, [ ];
          }
@@ -359,12 +370,12 @@ sub skip_node {
    0   # proceed with the next regular "read"
 }
 #############################################################################################
-sub parse_file {
+sub parse_filehandle {
    my ($self, $fh)=@_;
    $self->source=$fh;
    eval {
       parse($self, new XML::LibXML::Reader(IO => $fh, no_blanks=>1));
-   } or die "invalid data file ", $self->filename, ": $@\n";
+   } or die "invalid ", (defined($self->filename) ? "data file ".$self->filename : "XML input stream"), ": $@\n";
 }
 
 sub parse_string {
@@ -381,7 +392,7 @@ sub provide_ext {
    my $ret=1;
    while ($ext_attr =~ /\G (\d+) (?: = ([^\s\#]+) (?: \#([\d.]+))? )? (?:\s+|$)/xgc) {
       $self->ext->[$1] //= do {
-         my $URI=downgradeUTF8($2 // die "invalid reference to an extension #$1 before its introduction\n");
+         my $URI=$2 // die "invalid reference to an extension #$1 before its introduction\n";
          my $version=$3;
          if (my $ext=provide Extension($URI, $mandatory)) {
             my $version_num=defined($version) ? eval("v$version") : "";
@@ -411,7 +422,9 @@ sub provide_ext {
 #############################################################################################
 sub verify_integrity {
    my ($self)=@_;
-   if (defined $self->filename) {
+   if ($self->chk eq $always_valid_checksum) {
+      $self->trusted=1;
+   } elsif (defined $self->filename) {
       my ($fsize, $mtime)=(stat $self->filename)[7,9];
       $self->trusted= $self->chk==($mtime^$fsize) || $self->chk==($mtime-1^$fsize);
    } else {
@@ -421,7 +434,7 @@ sub verify_integrity {
 #############################################################################################
 sub eval_qualified_type {
    my ($self, $type, $is_object, $in_tree)=@_;
-   if (my ($app_name, $type_expr)=map { downgradeUTF8($_) } $type =~ /^(?:($id_re)::)? ($type_re)$/xo) {
+   if (my ($app_name, $type_expr)= $type =~ /^(?:($id_re)::)? ($type_re)$/xo) {
       my $app= defined($app_name)
                ? add Application($app_name) :
                $in_tree
@@ -478,14 +491,14 @@ sub close_object {
 
 sub open_property {
    my ($self, $attrs)=@_;
-   my $prop_name=downgradeUTF8($attrs->{name});
+   my $prop_name=$attrs->{name};
    if ($prop_name =~ s/^($id_re):://o) {
       add Application($1);
    }
    if (defined (my $prop=$self->cur_proto->[-1]->lookup_property($prop_name))) {
       push @{$self->cur_property}, [ $prop, extract_type($self, $attrs, 0) ];
       if (defined (my $value=$attrs->{value})) {
-         push @{$self->cur_value}, [ downgradeUTF8($value) ];
+         push @{$self->cur_value}, [ $value ];
       } else {
          push @{$self->cur_value}, [ exists $attrs->{undef} ? undef : () ];
       }
@@ -533,12 +546,12 @@ sub close_property {
 
 sub open_attachment {
    my ($self, $attrs)=@_;
-   my $name=downgradeUTF8($attrs->{name});
+   my $name=$attrs->{name};
    my $type=extract_type($self, $attrs, 0);
    my $construct=$attrs->{construct};
-   push @{$self->cur_property}, [ $name, $type, defined($construct) && downgradeUTF8($construct) ];
+   push @{$self->cur_property}, [ $name, $type, $construct ];
    if (defined (my $value=$attrs->{value})) {
-      push @{$self->cur_value}, [ downgradeUTF8($attrs->{value}) ];
+      push @{$self->cur_value}, [ $attrs->{value} ];
    } else {
       push @{$self->cur_value}, [ ];
    }
@@ -552,11 +565,7 @@ sub close_attachment {
    my ($value)=@{ pop @{$self->cur_value} };
    if (defined($type)) {
       if (ref($type)) {
-         if ($construct) {
-            $value=$type->construct->($self->cur_object->[-1]->give($construct), $value);
-         } else {
-            $value=$type->construct->($value);
-         }
+         $value=$type->construct->($construct ? $self->cur_object->[-1]->give_list($construct) : (), $value);
       } elsif ($type eq "text") {
          $value=$self->text;
       }
@@ -600,35 +609,50 @@ sub open_v {
    my $value=[ ];
    if (defined (my $dim=$attrs->{dim})) {
       set_array_flags($value, $dim, "dim");
-   } elsif (defined (my $cols=$self->cols->[-1])) {
-      set_array_flags($value, $cols, "dim");
    }
    if (defined (my $i=$attrs->{i})) {
       push @{$self->cur_value->[-1]}, $i+0;
    }
    push @{$self->cur_value}, $value;
-   push @{$self->cols}, undef;
    $self->text="";
    1
 }
 
-sub close_tv {
+sub close_t {
    my ($self)=@_;
    pop @{$self->cols};
    my $list=pop @{$self->cur_value};
    if (!@$list && $self->text =~ /\S/) {
-      if ($self->text =~ /['"]/) {
-         $self->text=downgradeUTF8($self->text);
-         while ($self->text =~ /\G\s* (?: (['"]) (.*?) \1 | (\S+))/xg) {
-            push @$list, defined($1) ? $2 : $3;
-         }
-      } else {
-         $self->text =~ s/^\s+//;
-         @$list=split /\s+/, downgradeUTF8($self->text);
+      split_list_value($self->text, $list);
+   }
+   push @{$self->cur_value->[-1]}, $list;
+   $self->text="";
+}
+
+sub close_v {
+   my ($self)=@_;
+   my $list=pop @{$self->cur_value};
+   if (!@$list) {
+      if ($self->text =~ /\S/) {
+         split_list_value($self->text, $list);
+      } elsif (defined (my $cols=$self->cols->[-1])) {
+         set_array_flags($list, $cols, "dim");
       }
    }
    push @{$self->cur_value->[-1]}, $list;
    $self->text="";
+}
+
+sub split_list_value {
+   my ($text, $list)=@_;
+   if ($text =~ /['"]/) {
+      while ($text =~ /\G\s* (?: (['"]) (.*?) \1 | (\S+))/xg) {
+         push @$list, defined($1) ? $2 : $3;
+      }
+   } else {
+      $text =~ s/^\s+//;
+      @$list=split /\s+/, $text;
+   }
 }
 
 sub open_m {
@@ -654,46 +678,36 @@ sub close_m {
 
 sub open_e {
    my ($self, $attrs)=@_;
-   if (defined (my $i=$attrs->{i})) {
-      push @{$self->cur_value->[-1]}, $i+0;
-   }
+   &store_element_index;
    $self->text="";
    1
 }
 
 sub close_e {
    my ($self)=@_;
-   push @{$self->cur_value->[-1]}, downgradeUTF8($self->text);
+   push @{$self->cur_value->[-1]}, $self->text;
 }
 
 sub open_t {
    my ($self, $attrs)=@_;
    my $value=[ ];
-   if (defined (my $id=$attrs->{id})) {
-      --$id;
-      set_array_flags($value, -1, $self->instance_by_id->[$id]=undef);
-      $self->last_id=$id;
-   } else {
-      set_array_flags($value, -1);
-   }
-   if (defined (my $i=$attrs->{i})) {
-      push @{$self->cur_value->[-1]}, $i+0;
-   }
+   set_array_flags($value, -1);
+   &store_element_index;
    $self->text="";
    push @{$self->cols}, undef;
    push @{$self->cur_value}, $value;
    1
 }
 
-sub open_r {
+sub store_element_index {
    my ($self, $attrs)=@_;
-   if (defined (my $id=$attrs->{id})) {
-      $self->last_id=$id-1;
-   } elsif (!defined($self->last_id)) {
-      die "default instance reference without preceding named instances\n";
+   if (defined (my $i=$attrs->{i})) {
+      my $vec=$self->cur_value->[-1];
+      if (!@$vec && defined (my $cols=$self->cols->[-1])) {
+         set_array_flags($vec, $cols, "dim");
+      }
+      push @$vec, $i+0;
    }
-   push_scalar($self->cur_value->[-1], $self->instance_by_id->[$self->last_id]);
-   1
 }
 
 sub save_backup {
@@ -715,6 +729,7 @@ use Polymake::Struct (
    [ new => '$' ],
    [ '$filename' => 'Cwd::abs_path(#1)' ],
    '$is_compressed',
+   '$is_always_valid',   # file has a fake checksum assuming validity; used in testsuites only
 );
 
 sub load {
@@ -744,12 +759,25 @@ sub load {
    my $reader=new XMLreader($self->filename, $object);
    local $PropertyType::trusted_value=1;
    $reader->trusted=$self->is_compressed;
-   $reader->parse_file($fh);
+   $reader->parse_filehandle($fh);
+   $self->is_always_valid=$reader->chk eq $always_valid_checksum;
    unless ($PropertyType::trusted_value) {
       $object->transaction->changed=1;
       $object->transaction->commit($object);
       $object->dont_save if $suppress_auto_save;
    }
+}
+
+sub load_stream {
+   shift;
+   my ($object, $fh)=@_;
+   my $reader=new XMLreader(undef, $object);
+   local $PropertyType::trusted_value=0;
+   local $XMLreader::force_verification=1;
+   $object->begin_init_transaction;
+   $reader->parse_filehandle($fh);
+   $object->transaction->changed=1;
+   $object->transaction->commit($object);
 }
 #############################################################################################
 sub load_data {
@@ -759,7 +787,7 @@ sub load_data {
    my $reader=new XMLreader($self->filename, new LooseData());
    local $PropertyType::trusted_value=1;
    $reader->trusted=$self->is_compressed;
-   $reader->parse_file($fh);
+   $reader->parse_filehandle($fh);
    if (!$reader->trusted && !$suppress_auto_save && -w $self->filename) {
       save_data($self, $reader->cur_value, $reader->cur_object->[0]->description);
    }
@@ -825,6 +853,729 @@ sub flags { $Property::is_multiple | $Property::is_subobject_array }
 sub subobject_type { $_[0]->type->params->[0] }
 
 #############################################################################################
+#
+#  XML Writer
+#
+package Polymake::Core::XMLwriter;
+use XML::Writer;
+
+my $noXML="noXML\n";
+
+sub complain_no_serialization : method {
+   die "don't know how to serialize ", $_[0]->full_name, " to XML\n";
+}
+
+# setting of the final method pointers is deferred until the first use
+# because during the initial load phase not all type descriptors might be available
+sub set_methods : method {
+   my $proto=shift;
+   eval { generate_methods($proto, $proto->cppoptions->descr) };
+   if ($@) {
+      if ($@ eq $noXML) {
+         $proto->toXML=\&complain_no_serialization;
+         $proto->toXMLschema=\&complain_no_serialization;
+      } else {
+         die $@;
+      }
+   }
+   # if called from the writer, do the real job right now
+   if (@_) {
+      $proto->toXML->(@_);
+   }
+}
+
+sub generate_methods {
+   my ($proto, $type_descr)=@_;
+   if ($proto->toXML && $proto->toXML != \&set_methods && $proto->cppoptions->descr == $type_descr) {
+      # reuse already generated methods
+      return ($proto->toXML, $proto->toXMLschema);
+   }
+   my ($toXML, $toXMLschema)=do {
+      if ($type_descr->is_container) {
+         if ($type_descr->is_assoc_container) {
+            generate_methods_for_assoc_container($type_descr);
+         } elsif ((my $dim=$type_descr->own_dimension)==2) {
+            generate_methods_for_matrix($type_descr);
+         } elsif ($dim==1) {
+            if ($type_descr->is_sparse_container) {
+               generate_methods_for_sparse_container($type_descr);
+            } else {
+               generate_methods_for_dense_container($type_descr);
+            }
+         } else {
+            die $noXML;
+         }
+      } elsif ($type_descr->is_composite) {
+         generate_methods_for_composite($type_descr->member_types, $type_descr->member_descrs);
+      } elsif ($type_descr->is_serializable) {
+         generate_methods_for_serialized($type_descr);
+      } else {
+         die $noXML;
+      }
+   };
+   if ($proto->cppoptions->descr == $type_descr) {
+      # cache the methods for later use
+      $proto->toXML=$toXML;
+      $proto->toXMLschema=$toXMLschema;
+   }
+   ($toXML, $toXMLschema)
+}
+#############################################################################################
+sub write_sparse_sequence {
+   my ($toXML, $tag, $arr, $writer, $constraints, @attrs)=@_;
+   my $dim=scalar @$arr;
+   if (my $size=$arr->size) {
+      if ($size == $dim) {
+         $writer->startTag($tag, @attrs);
+         foreach my $elem (@$arr) {
+            $toXML->($elem, $writer);
+         }
+      } else {
+         push @attrs, dim => $dim unless $constraints eq "!dim";
+         $writer->startTag($tag, @attrs);
+         for (my $it=args::entire($arr); $it; ++$it) {
+            $toXML->($it->deref, $writer, undef, i => $it->index);
+         }
+      }
+      $writer->endTag($tag);
+   } else {
+      push @attrs, dim => $dim unless $constraints eq "!dim";
+      $writer->emptyTag($tag, @attrs);
+   }
+}
+
+sub write_schema_for_sparse_sequence {
+   my ($proto, $toXMLschema, $tag, $writer, $constraints, @attrs)=@_;
+   $writer->startTag("element", name => $tag);
+   $writer->emptyTag("ref", name => $_) for @attrs;
+   $writer->startTag("choice");
+   $writer->startTag("group");
+   $writer->startTag("zeroOrMore");
+   produce_schema_for_complex_type($proto, $toXMLschema, $writer);
+   $writer->endTag("zeroOrMore");
+   $writer->endTag("group");
+   $writer->startTag("group");
+   $writer->emptyTag("ref", name => "SparseContainerDim") unless $constraints eq "!dim";
+   $writer->startTag("zeroOrMore");
+   $toXMLschema->($writer, undef, "ElementIndex");
+   $writer->endTag("zeroOrMore");
+   $writer->endTag("group");
+   $writer->endTag("choice");
+   $writer->endTag("element");
+}
+#############################################################################################
+sub write_simple_sparse_sequence {
+   my ($value_proto, $arr, $writer, $constraints, @attrs)=@_;
+   my $dim=scalar @$arr;
+   if (my $size=$arr->size) {
+      if ($size == $dim) {
+         if ($value_proto->toString) {
+            $writer->dataElement("v", join(" ", map { $value_proto->toString->($_) } @$arr), @attrs);
+         } else {
+            $writer->dataElement("v", join(" ", @$arr), @attrs);
+         }
+      } else {
+         push @attrs, dim => $dim unless $constraints eq "!dim";
+         $writer->startTag("v", @attrs);
+         $writer->setDataMode(0);
+         for (my $it=args::entire($arr); $it; ++$it) {
+            $writer->characters(" ");
+            $writer->dataElement("e", $value_proto->toString->($it->deref), i => $it->index);
+         }
+         $writer->characters(" ");
+         $writer->setDataMode(1);
+         $writer->endTag("v");
+      }
+   } else {
+      push @attrs, dim => $dim unless $constraints eq "!dim";
+      $writer->emptyTag("v", @attrs);
+   }
+}
+
+sub write_schema_for_simple_sparse_sequence {
+   my ($value_proto, $writer, $constraints, @attrs)=@_;
+   $writer->startTag("element", name => "v");
+   $writer->emptyTag("ref", name => $_) for @attrs;
+   $writer->startTag("choice");
+   produce_schema_for_simple_type_list($value_proto, $writer);
+   $writer->startTag("group");
+   $writer->emptyTag("ref", name => "SparseContainerDim") unless $constraints eq "!dim";
+   $writer->startTag("zeroOrMore");
+   $writer->startTag("element", name => "e");
+   $writer->emptyTag("ref", name => "ElementIndex");
+   produce_schema_for_simple_type($value_proto, $writer);
+   $writer->endTag("element");
+   $writer->endTag("zeroOrMore");
+   $writer->endTag("group");
+   $writer->endTag("choice");
+   $writer->endTag("element");
+}
+#############################################################################################
+sub generate_methods_for_sparse_container {
+   my ($type_descr)=@_;
+   my $value_proto=$type_descr->value_type;
+   my $value_descr=$type_descr->value_descr;
+   defined($value_proto) && defined($value_descr) or die $noXML;
+   if ($value_proto->toXML) {
+      my $tag= $value_proto->dimension==0 ? "v" : "m";
+      my ($value_toXML, $value_toXMLschema)=generate_methods($value_proto, $value_descr);
+      ( sub {
+           write_sparse_sequence($value_toXML, $tag, @_);
+        } ,
+        sub {
+           write_schema_for_sparse_sequence($value_proto, $value_toXMLschema, $tag, @_);
+        } )
+   } else {
+      ( sub {
+           write_simple_sparse_sequence($value_proto, @_);
+        } ,
+        sub {
+           write_schema_for_simple_sparse_sequence($value_proto, @_);
+        } )
+   }
+}
+#############################################################################################
+sub generate_methods_for_dense_container {
+   my ($type_descr)=@_;
+   my $value_proto=$type_descr->value_type;
+   my $value_descr=$type_descr->value_descr;
+   defined($value_proto) && defined($value_descr) or die $noXML;
+   if ($value_proto->toXML) {
+      my $tag= $value_proto->dimension==0 ? "v" : "m";
+      my ($value_toXML, $value_toXMLschema)=generate_methods($value_proto, $value_descr);
+      ( # XML writer
+        sub {
+           my ($value, $writer, $constraints, @attrs)=@_;
+           if (@$value) {
+              $writer->startTag($tag, @attrs);
+              foreach my $elem (@$value) {
+                 $value_toXML->($elem, $writer);
+              }
+              $writer->endTag($tag);
+           } else {
+              $writer->emptyTag($tag, @attrs);
+           }
+        } ,
+        # schema writer
+        sub {
+           my ($writer, $constraints, @attrs)=@_;
+           $writer->startTag("element", name => $tag);
+           $writer->emptyTag("ref", name => $_) for @attrs;
+           $writer->startTag("zeroOrMore");
+           produce_schema_for_complex_type($value_proto, $value_toXMLschema, $writer);
+           $writer->endTag("zeroOrMore");
+           $writer->endTag("element");
+        } )
+
+   } else {
+      ( # XML writer
+        $value_proto->toString
+        ? sub {
+             my ($value, $writer, $constraints, @attrs)=@_;
+             if (@$value) {
+                $writer->dataElement("v", join(" ", map { $value_proto->toString->($_) } @$value), @attrs);
+             } else {
+                $writer->emptyTag("v", @attrs);
+             }
+          }
+        : sub {
+             my ($value, $writer, $constraints, @attrs)=@_;
+             if (@$value) {
+                $writer->dataElement("v", join(" ", @$value), @attrs);
+             } else {
+                $writer->emptyTag("v", @attrs);
+             }
+          } ,
+        # schema writer
+        sub {
+           my ($writer, $constraints, @attrs)=@_;
+           $writer->startTag("element", name => "v");
+           $writer->emptyTag("ref", name => $_) for @attrs;
+           produce_schema_for_simple_type_list($value_proto, $writer);
+           $writer->endTag("element");
+        } )
+   }
+}
+##############################################################################################
+sub generate_methods_for_matrix {
+   my ($type_descr)=@_;
+   my $row_proto=$type_descr->value_type;
+   my $row_descr=$type_descr->value_descr;
+   defined($row_proto) && defined($row_descr) or die $noXML;
+
+   my $may_have_gaps=$type_descr->is_sparse_serialized;
+   my $write_cols=$row_descr->is_sparse_container || $row_descr->is_set;
+   my ($row_toXML, $row_toXMLschema)=generate_methods($row_proto, $row_descr);
+   $may_have_gaps
+   ? ( # XML writer
+       sub {
+          my $value=shift;
+          write_sparse_sequence($row_toXML, "m", args::rows($value), @_);
+       } ,
+       # schema writer
+       sub {
+          write_schema_for_sparse_sequence($row_proto, $row_toXMLschema, "m", @_);
+     } )
+   : ( # XML writer
+       sub {
+          my ($value, $writer, $constraints, @attrs)=@_;
+          push @attrs, cols => $value->cols if $write_cols || !@$value;
+          if (@$value) {
+             $writer->startTag("m", @attrs);
+             my $constraint= $write_cols ? "!dim" : "";
+             foreach my $row (@$value) {
+                $row_toXML->($row, $writer, $constraint);
+             }
+             $writer->endTag("m");
+          } else {
+             $writer->emptyTag("m", @attrs);
+          }
+       } ,
+       # schema writer
+       sub {
+          my ($writer, $constraints, @attrs)=@_;
+          $writer->startTag("element", name => "m");
+          $writer->startTag("optional") unless $write_cols;
+          $writer->emptyTag("ref", name => "NumberColumns");
+          $writer->endTag("optional") unless $write_cols;
+          $writer->emptyTag("ref", name => $_) for @attrs;
+          $writer->startTag("zeroOrMore");
+          produce_schema_for_complex_type($row_proto, $row_toXMLschema, $writer, "!dim");
+          $writer->endTag("zeroOrMore");
+          $writer->endTag("element");
+       } )
+}
+##############################################################################################
+sub generate_methods_for_assoc_container {
+   my ($type_descr)=@_;
+   my ($pair_toXML, $pair_toXMLschema)=generate_methods_for_composite([ $type_descr->key_type, $type_descr->value_type ],
+                                                                      [ $type_descr->key_descr, $type_descr->value_descr ]);
+   ( # XML writer
+     sub {
+        my ($value, $writer, $constraints, @attrs)=@_;
+        if (keys %$value) {
+           $writer->startTag("m", @attrs);
+           while (my ($k, $v)=each %$value) {
+              $pair_toXML->([$k, $v], $writer);
+           }
+           $writer->endTag("m");
+        } else {
+           $writer->emptyTag("m");
+        }
+     },
+     # schema writer
+     sub {
+        my ($writer, $constraints, @attrs)=@_;
+        $writer->startTag("element", name => "m");
+        $writer->emptyTag("ref", name => $_) for @attrs;
+        $writer->startTag("zeroOrMore");
+        $pair_toXMLschema->($writer);
+        $writer->endTag("zeroOrMore");
+        $writer->endTag("element");
+     } )
+}
+############################################################################################
+# simple data type within a complex tuple
+sub generate_method_for_simple_item {
+   my ($proto)=@_;
+   sub {
+      my ($value, $writer)=@_;
+      $writer->dataElement("e", $proto->toString->($value));
+   }
+}
+#############################################################################################
+sub generate_methods_for_composite {
+   my ($member_types, $member_descrs)=@_;
+   defined($member_types) && defined($member_descrs) or die $noXML;
+   my ($complex, $formatted)=(0, 0);
+   my (@member_to_XML, @member_to_XMLschema);
+   my $i=0;
+   foreach my $member_proto (@$member_types) {
+      defined($member_proto) or die $noXML;
+      if ($member_proto->toXML) {
+         if (!$complex) {
+            # fill the missing methods for preceding simple members
+            for (my $j=0; $j<$i; ++$j) {
+               push @member_to_XML, generate_method_for_simple_item($member_types->[$j]);
+               push @member_to_XMLschema, undef;
+            }
+         }
+         my ($toXML, $toXMLschema)=generate_methods($member_proto, $member_descrs->[$i]);
+         push @member_to_XML, $toXML;
+         push @member_to_XMLschema, $toXMLschema;
+         $complex=1;
+      } elsif ($complex) {
+         push @member_to_XML, generate_method_for_simple_item($member_proto);
+         push @member_to_XMLschema, undef;
+      } elsif ($member_proto->toString) {
+         $formatted=1;
+      }
+   } continue { ++$i }
+
+   if ($complex) {
+      ( # XML writer
+        sub {
+           my ($value, $writer, $constraints, @attrs)=@_;
+           $writer->startTag("t", @attrs);
+           my $i=0;
+           foreach my $member (@$value) {
+              $member_to_XML[$i]->($member, $writer);
+           } continue { ++$i }
+           $writer->endTag("t");
+        },
+        # schema writer
+        sub {
+           my ($writer, $constraints, @attrs)=@_;
+           $writer->startTag("element", name => "t");
+           $writer->emptyTag("ref", name => $_) for @attrs;
+           my $i=0;
+           foreach my $toXMLschema (@member_to_XMLschema) {
+              if (defined $toXMLschema) {
+                 produce_schema_for_complex_type($member_types->[$i], $toXMLschema, $writer);
+              } else {
+                 $writer->startTag("element", name => "e");
+                 produce_schema_for_simple_type($member_types->[$i], $writer);
+                 $writer->endTag("element");
+              }
+           } continue { ++$i }
+           $writer->endTag("element");
+        } )
+
+   } else {
+      ( # XML writer
+        $formatted
+        ? sub {
+             my ($value, $writer, $constraints, @attrs)=@_;
+             my $i=0;
+             $writer->dataElement("t", join(" ", map { $member_types->[$i++]->toString->($_) } @$value), @attrs);
+          }
+        : sub {
+             my ($value, $writer, $constraints, @attrs)=@_;
+             $writer->dataElement("t", join(" ", @$value), @attrs);
+          } ,
+        # schema writer
+        sub {
+           my ($writer, $constraints, @attrs)=@_;
+           $writer->startTag("element", name => "t");
+           $writer->emptyTag("ref", name => $_) for @attrs;
+           $writer->startTag("list");
+           foreach my $member_proto (@$member_types) {
+              produce_schema_for_simple_type($member_proto, $writer);
+           }
+           $writer->endTag("list");
+           $writer->endTag("element");
+        } )
+   }
+}
+#############################################################################################
+sub generate_methods_for_serialized {
+   my ($type_descr)=@_;
+   my $serialized_proto=$type_descr->serialized_type;
+   my $serialized_descr=$type_descr->serialized_descr;
+   defined($serialized_proto) && defined($serialized_descr) or die $noXML;
+   my ($toXML, $toXMLschema)=generate_methods($serialized_proto, $serialized_descr);
+   ( sub {
+        my $serialized=CPlusPlus::convert_to_serialized(shift);
+        $toXML->($serialized, @_);
+     },
+     $toXMLschema
+   )
+}
+#############################################################################################
+# called once per type, stores final method pointers
+sub type_toXMLschema : method {
+   my $proto=shift;
+   if ($proto->toXML) {
+      # complex type: first call will set the final methods
+      $proto->toXML->();
+
+   } elsif ($proto->XMLdatatype) {
+      $proto->toXMLschema=sub {
+         my ($writer)=@_;
+         my @datatypes=$proto->XMLdatatype->();
+         $writer->startTag("choice") if @datatypes>1;
+         foreach my $datatype (@datatypes) {
+            if (is_object($datatype)) {
+               # refers to another simple type
+               produce_schema_for_simple_type($datatype, $writer);
+            } elsif ($datatype =~ /^$id_re$/o) {
+               # standard type from the XSD library
+               $writer->emptyTag("data", type => $datatype);
+            } elsif ($datatype =~ /^(?:text-)?pattern:\s*/) {
+               $writer->startTag("data", type => "string");
+               $writer->dataElement("param", $', name => "pattern");
+               $writer->endTag("data");
+            } else {
+               die "unrecognizable XML datatype for simple type ", $proto->name, ": $datatype\n";
+            }
+         }
+         $writer->endTag("choice") if @datatypes>1;
+      };
+   } else {
+      $proto->toXMLschema=sub { $_[0]->emptyTag("text") };
+   }
+
+   $proto->toXMLschema->(@_);
+}
+
+sub element_name_for_type {
+   my ($proto)=@_;
+   $proto->application->name."-".$proto->xml_name
+}
+
+sub element_name_for_property_type {
+   &element_name_for_type.'-prop'
+}
+
+sub element_name_for_property {
+   my ($prop)=@_;
+   element_name_for_type($prop->belongs_to).".".$prop->name
+}
+
+sub element_name_for_contents {
+   &element_name_for_type.'-contents'
+}
+
+#############################################################################################
+sub produce_schema_for_complex_type {
+   my ($proto, $toXMLschema, $writer, $constraints)=@_;
+   $writer->{':types'}->{$proto} //= do {
+      push @{$writer->{':type_queue'}}, $proto;
+      ""
+   };
+   if (!$constraints && $toXMLschema == $proto->toXMLschema) {
+      $writer->emptyTag("ref", name => element_name_for_type($proto));
+   } else {
+      $toXMLschema->($writer, $constraints);
+   }
+}
+
+sub produce_schema_for_simple_type {
+   my ($proto, $writer)=@_;
+   if ($proto->XMLdatatype) {
+      $writer->{':types'}->{$proto} //= do {
+         push @{$writer->{':type_queue'}}, $proto;
+         ""
+      };
+      $writer->emptyTag("ref", name => element_name_for_type($proto));
+   } else {
+      $writer->emptyTag("text");
+   }
+}
+
+sub produce_schema_for_simple_type_list {
+   my ($proto, $writer)=@_;
+   if ($proto->XMLdatatype) {
+      my @datatypes=$proto->XMLdatatype->();
+      if (@datatypes==1 && is_string($datatypes[0]) && $datatypes[0] =~ /^text-pattern:\s+/) {
+         my $pattern=$';
+         $writer->startTag("data", type => "string");
+         $writer->dataElement("param", "($pattern)?(\\s+($pattern))*", name => "pattern");
+         $writer->endTag("data");
+      } else {
+         $writer->startTag("list");
+         $writer->startTag("zeroOrMore");
+         &produce_schema_for_simple_type;
+         $writer->endTag("zeroOrMore");
+         $writer->endTag("list");
+      }
+   } else {
+      $writer->emptyTag("text");
+   }
+}
+#############################################################################################
+sub produce_schema_for_LooseData {
+   my ($writer, @protos)=@_;
+   $writer->startTag("element", name => "data");
+   $writer->emptyTag("ref", name => "PolymakeVersion");
+   $writer->startTag("choice") if @protos>1;
+   foreach my $proto (@protos) {
+      $writer->startTag("group") if @protos>1;
+      $writer->startTag("attribute", name => "type");
+      $writer->dataElement("value", $proto->qualified_name);
+      $writer->endTag("attribute");
+      if ($proto->extension) {
+         $writer->emptyTag("ref", name => "Extensions");
+      }
+      $writer->startTag("optional");
+      $writer->startTag("element", name => "description");
+      $writer->emptyTag("text");
+      $writer->endTag("element");
+      $writer->endTag("optional");
+      $writer->emptyTag("ref", name => element_name_for_type($proto));
+      $writer->endTag("group") if @protos>1;
+   }
+   $writer->endTag("choice") if @protos>1;
+   $writer->endTag("element");
+}
+#############################################################################################
+sub produce_schema_for_Object {
+   my ($proto, $writer, $constraints)=@_;
+   if ($constraints ne "!top") {
+      $writer->startTag("define", name => element_name_for_type($proto));
+      $writer->startTag("element", name => "object");
+      $writer->emptyTag("ref", name => "PolymakeVersion");
+      $writer->startTag("attribute", name => "type");
+      $writer->dataElement("value", $proto->qualified_name);
+      $writer->endTag("attribute");
+      $writer->emptyTag("ref", name => "Extensions");
+      $writer->emptyTag("ref", name => element_name_for_contents($proto));
+      $writer->endTag("element");
+      $writer->endTag("define");
+   }
+
+   $writer->startTag("define", name => element_name_for_contents($proto));
+   $writer->emptyTag("ref", name => "ObjectTextDescriptions");
+
+   $writer->startTag("oneOrMore");
+   $writer->startTag("element", name => "property");
+   $writer->startTag("choice");
+   my %seen;
+   foreach my $obj_proto ($proto, @{$proto->linear_isa}) {
+      while (my ($prop_name, $prop)=each %{$obj_proto->properties}) {
+         if (!($prop->flags & ($Property::is_permutation | $Property::is_non_storable))) {
+            if ($obj_proto != $proto) {
+               $prop=$proto->property($prop_name);   # get the correct instantiation
+            }
+            $writer->{':props'}->{$prop} //= do {
+               push @{$writer->{':prop_queue'}}, $prop;
+               ""
+            };
+            $seen{$prop}++ or $writer->emptyTag("ref", name => element_name_for_property($prop));
+         }
+      }
+   }
+   $writer->endTag("choice");
+   $writer->endTag("element");
+   $writer->endTag("oneOrMore");
+
+   $writer->startTag("zeroOrMore");
+   $writer->emptyTag("ref", name => "Attachment");
+   $writer->endTag("zeroOrMore");
+   $writer->endTag("define");
+}
+
+sub produce_schema_for_subobject {
+   my ($proto, $writer, $parent_proto)=@_;
+   my @derived=instanceof ObjectType::Augmented($proto)
+               ? values %{$proto->inst_cache}
+               : grep { not instanceof ObjectType::Augmented($_) || instanceof ObjectType::Specialization($_) || $_->abstract } $proto->derived;
+   $writer->startTag("choice") if @derived;
+
+   foreach my $obj_proto ($proto, @derived) {
+      $writer->{':types'}->{$obj_proto} //= do {
+         push @{$writer->{':type_queue'}}, $obj_proto;
+         "!top"
+      };
+      $writer->startTag("element", name => "object");
+      if ($obj_proto != $proto) {
+         $writer->startTag("attribute", name => "type");
+         my $qual_type=$obj_proto->pure_type->qualified_name($parent_proto->application);
+         if ($qual_type =~ /^${id_re}::/) {
+            # always contains application name
+            $writer->dataElement("value", $qual_type);
+         } else {
+            # might miss application name
+            $writer->startTag("choice");
+            $writer->dataElement("value", $qual_type);
+            $writer->dataElement("value", $obj_proto->pure_type->application->name."::".$qual_type);
+            $writer->endTag("choice");
+         }
+         $writer->endTag("attribute");
+      }
+      $writer->emptyTag("ref", name => element_name_for_contents($obj_proto));
+      $writer->endTag("element");
+   }
+   $writer->endTag("choice") if @derived;
+}
+
+sub prepare_schema_for_property_type {
+   my ($proto, $writer)=@_;
+   $writer->{':types'}->{$proto} //= do {
+      push @{$writer->{':type_queue'}}, $proto;
+      ""
+   };
+   # some derived types might be instantiated later
+   if (my @derived=grep { !instanceof PropertyTypeInstance($_) } $proto->derived
+         or
+       defined($proto->generic) && @{$proto->generic->derived_abstract}) {
+      my $prop_type_name=element_name_for_property_type($proto);
+      $writer->emptyTag("ref", name => $prop_type_name);
+      $writer->{':prop_types'}->{$prop_type_name} //= $proto;
+      foreach $proto (@derived) {
+         $writer->{':types'}->{$proto} //= do {
+            push @{$writer->{':type_queue'}}, $proto;
+            ""
+         };
+      }
+   } else {
+      $writer->emptyTag("ref", name => element_name_for_type($proto));
+   }
+}
+
+sub produce_schema_for_property {
+   my ($prop, $writer)=@_;
+   $writer->startTag("define", name => element_name_for_property($prop));
+   $writer->startTag("attribute", name => "name");
+   $writer->dataElement("value", $prop->qual_name);
+   $writer->endTag("attribute");
+
+   if ($prop->flags & $Property::is_subobject) {
+      if ($prop->flags & $Property::is_multiple) {
+         $writer->startTag("oneOrMore");
+      }
+      produce_schema_for_subobject($prop->type, $writer, $prop->belongs_to);
+      if ($prop->flags & $Property::is_multiple) {
+         $writer->endTag("oneOrMore");
+      }
+   } else {
+      $writer->startTag("choice");
+      $writer->startTag("attribute", name => "undef");
+      $writer->dataElement("value", "true");
+      $writer->endTag("attribute");
+
+      if ($prop->flags & $Property::is_subobject_array) {
+         $writer->startTag("element", name => "m");
+         $writer->startTag("zeroOrMore");
+         produce_schema_for_subobject($prop->type->params->[0], $writer, $prop->belongs_to);
+         $writer->endTag("zeroOrMore");
+         $writer->endTag("element");
+
+      } elsif ($prop->type->toXML) {
+         prepare_schema_for_property_type($prop->type, $writer);
+
+      } elsif ($prop->type->XMLdatatype) {
+         $writer->startTag("attribute", name => "value");
+         produce_schema_for_simple_type($prop->type, $writer);
+         $writer->endTag("attribute");
+
+      } else {
+         $writer->emptyTag("ref", name => "Text");
+      }
+
+      $writer->endTag("choice");
+   }
+   $writer->endTag("define");
+}
+#############################################################################################
+sub produce_schema_for_property_type {
+   my ($name, $proto, $writer)=@_;
+   $writer->startTag("define", name => $name);
+   $writer->startTag("choice");
+   $writer->emptyTag("ref", name => element_name_for_type($proto));
+   foreach my $derived (grep { !instanceof PropertyTypeInstance($_) } $proto->derived) {
+      $writer->{':types'}->{$derived} // die "internal error: derived type ", $derived->full_name, " spuriously instantiated during schema creation\n";
+      $writer->startTag("group");
+      $writer->startTag("attribute", name => "type");
+      $writer->dataElement("value", $derived->full_name);
+      $writer->endTag("attribute");
+      $writer->emptyTag("ref", name => element_name_for_type($derived));
+      $writer->endTag("group");
+   }
+   $writer->endTag("choice");
+   $writer->endTag("define");
+}
+#############################################################################################
 package Polymake::Core::XMLwriter::PITemplate;
 use Polymake::Struct (
    [ new => '$$' ],
@@ -843,6 +1594,17 @@ sub new {
       push @{$self->length}, $1;
    }
    $self
+}
+
+sub substitute {
+   my ($self, $f, $text)=@_;
+   if ($self->length->[$f] == length($text)) {
+      my $body=$self->body;
+      substr($body, $self->offset->[$f], $self->length->[$f])=$text;
+      $body;
+   } else {
+      die "invalid field index or text size\n";
+   }
 }
 
 package Polymake::Core::XMLwriter::PIbody;
@@ -881,12 +1643,7 @@ sub print {
    }
 }
 #############################################################################################
-#
-#  XML Writer
-#
-
 package Polymake::Core::XMLwriter;
-use XML::Writer;
 
 my @writer_init=( PREFIX_MAP => { $pmns=>"" }, NAMESPACES => 1,
                   DATA_MODE => 1, DATA_INDENT => 2, ENCODING => 'utf-8', UNSAFE => !$DeveloperMode );
@@ -1023,16 +1780,20 @@ sub write_object_contents {
       }
    }
 }
-
+#############################################################################################
 sub save {
-   my ($output, $object, $is_file)=@_;
+   my ($output, $object, $is_file, $is_always_valid)=@_;
    my $writer=new XMLwriter($output);
    $writer->xmlDecl;
 
    my $pi;
    if ($is_file>=0) {
-      $pi=new PIbody($data_pi, $output);
-      $writer->pi($pi->template->name, $pi);
+      if ($is_always_valid) {
+         $writer->pi($data_pi->name, $data_pi->substitute(0, $always_valid_checksum));
+      } else {
+         $pi=new PIbody($data_pi, $output);
+         $writer->pi($data_pi->name, $pi);
+      }
    }
    $writer->{':suppress_ext'}={};
    $writer->{':ext'}={};
@@ -1061,7 +1822,7 @@ sub save {
       }
    }
 }
-
+#############################################################################################
 sub save_data {
    my ($output, $data, $description, $is_file)=@_;
    my $writer=new XMLwriter($output);
@@ -1100,14 +1861,71 @@ sub save_data {
       }
    }
 }
+#############################################################################################
+sub save_schema {
+   my ($output, @queue)=@_;
+   my (%types, %prop_types, %props, @prop_queue);
+   $types{$_}="" for @queue;
 
+   my $writer=new XMLwriter($output, PREFIX_MAP => { $RelaxNGns=>"" });
+   $writer->{':types'}=\%types;
+   $writer->{':type_queue'}=\@queue;
+   $writer->{':props'}=\%props;
+   $writer->{':prop_types'}=\%prop_types;
+   $writer->{':prop_queue'}=\@prop_queue;
+
+   $writer->xmlDecl;
+   $writer->startTag([ $RelaxNGns, "grammar" ],
+                     datatypeLibrary => $W3CSchemaDatatypes,
+                     ns => $pmns);
+   $writer->emptyTag("include", href => "file://$InstallTop/xml/common_grammar.rng");
+
+   $writer->startTag("define", name => "PolymakeVersion");
+   $writer->startTag("attribute", name => "version");
+   $writer->dataElement("value", $Version);
+   $writer->endTag("attribute");
+   $writer->endTag("define");
+
+   $writer->startTag("start");
+   if (instanceof PropertyType($queue[0])) {
+      produce_schema_for_LooseData($writer, @queue);
+   } else {
+      $writer->startTag("choice") if @queue > 1;
+      foreach my $proto (@queue) {
+         $writer->emptyTag("ref", name => element_name_for_type($proto));
+      }
+      $writer->endTag("choice") if @queue > 1;
+   }
+   $writer->endTag("start");
+
+   while (defined (my $prop=shift @prop_queue) ||
+          defined (my $proto=shift @queue)) {
+      if (defined $prop) {
+         produce_schema_for_property($prop, $writer);
+      } elsif (instanceof ObjectType($proto)) {
+         produce_schema_for_Object($proto, $writer, $types{$proto});
+      } else {
+         $writer->startTag("define", name => element_name_for_type($proto));
+         $proto->toXMLschema->($writer, $types{$proto});
+         $writer->endTag("define");
+      }
+   }
+
+   while (my ($name, $proto)=each %prop_types) {
+      produce_schema_for_property_type($name, $proto, $writer);
+   }
+
+   $writer->endTag("grammar");
+   $writer->end;
+}
+#############################################################################################
 package Polymake::Core::XMLfile;
 
 sub save {
    my ($self, $object)=@_;
    my $compress=layer_for_compression($self);
    my ($of, $of_k)=new OverwriteFile($self->filename, ":utf8".$compress);
-   XMLwriter::save($of, $object, $compress ? -1 : 1);
+   XMLwriter::save($of, $object, $compress ? -1 : 1, $self->is_always_valid);
    close $of;
 }
 
@@ -1116,6 +1934,46 @@ sub save_data {
    my $compress=layer_for_compression($self);
    my ($of, $of_k)=new OverwriteFile($self->filename, ":utf8".$compress);
    XMLwriter::save_data($of, $data, $description, $compress ? -1 : 1);
+   close $of;
+}
+
+sub save_schema {
+   my $self=shift;
+   my $compress=layer_for_compression($self);
+   my ($of, $of_k)=new OverwriteFile($self->filename, ":utf8".$compress);
+   my $kind;
+   XMLwriter::save_schema($of, map {
+      if ($_->abstract) {
+         die "sorry, can't create a schema for a generic parametrized type, please specify a concrete instance\n";
+      }
+      if (instanceof ObjectType($_)) {
+         if ($kind eq "small") {
+            die "can't mix big object types and property types in the same schema\n";
+         }
+         $kind //= "big";
+         if (instanceof ObjectType::Augmented($_)) {
+            warn_print( "can't create a standalone schema for an augmented subobject type;\nwill create a schema for ", $_->pure_type->full_name, " instead\n" );
+            $_->pure_type
+         } elsif (instanceof ObjectType::Specialization($_)) {
+            if (defined ($_->full_spez_for)) {
+               warn_print( "can't create a standalone schema for a type specialization;\nwill create a schema for ", $_->full_spez_for->full_name, " instead\n" );
+               $_->full_spez_for
+            } else {
+               die "can't create a standalone schema for a partial type specialization\n";
+            }
+         } else {
+            $_
+         }
+      } elsif (instanceof PropertyType($_)) {
+         if ($kind eq "big") {
+            die "can't mix big object types and property types in the same schema\n";
+         }
+         $kind //= "small";
+         $_
+      } else {
+         die "argument ", ref($_), " is neither a big object nor a property type\n";
+      }
+   } @_);
    close $of;
 }
 

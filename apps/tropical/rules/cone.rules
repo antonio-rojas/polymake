@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -14,6 +14,7 @@
 #-------------------------------------------------------------------------------
 
 
+# @Category Combinatorics
 object Polytope {
 
 	#rule PSEUDOVERTEX_LABELS : PSEUDOVERTEX_COVECTORS {
@@ -35,7 +36,7 @@ object Polytope {
 	}
 	weight 1.20;
 
-	rule ENVELOPE.INEQUALITIES, ENVELOPE.EQUATIONS : POINTS{
+	rule ENVELOPE.INEQUALITIES, ENVELOPE.EQUATIONS : POINTS {
 		$this->ENVELOPE = envelope($this->POINTS);
 	}
 
@@ -43,23 +44,23 @@ object Polytope {
 		$this->DOME = dome_hyperplane_arrangement($this->POINTS);
 	}
 
-	rule PSEUDOVERTICES, MAXIMAL_COVECTOR_CELLS : DOME {
+	rule PSEUDOVERTICES, FAR_PSEUDOVERTICES, MAXIMAL_COVECTOR_CELLS : DOME {
 		extract_pseudovertices($this);
 	}
 
-	rule TORUS_COVECTOR_DECOMPOSITION, POLYTOPE_COVECTOR_DECOMPOSITION, POLYTOPE_MAXIMAL_COVECTOR_CELLS, MAXIMAL_COVECTORS, POLYTOPE_MAXIMAL_COVECTORS : POINTS, PSEUDOVERTICES, PSEUDOVERTEX_COVECTORS, MAXIMAL_COVECTOR_CELLS {
-		compute_covector_decomposition($this,0);
-	}
-	weight 6.20;
+   rule TORUS_COVECTOR_DECOMPOSITION, MAXIMAL_COVECTORS : POINTS, PSEUDOVERTICES, PSEUDOVERTEX_COVECTORS, MAXIMAL_COVECTOR_CELLS, POLYTOPE_COVECTOR_DECOMPOSITION {
+      compute_covector_decomposition($this, compute_only_tropical_span=>0);
+   }
+   weight 6.10;
 
 	rule POLYTOPE_COVECTOR_DECOMPOSITION, POLYTOPE_MAXIMAL_COVECTOR_CELLS, POLYTOPE_MAXIMAL_COVECTORS : POINTS, PSEUDOVERTICES, PSEUDOVERTEX_COVECTORS, MAXIMAL_COVECTOR_CELLS {
-		compute_covector_decomposition($this,1);
+		compute_covector_decomposition($this, compute_only_tropical_span=>1);
 	}
 	weight 6.10;
 
 	rule MAXIMAL_COVECTORS : MAXIMAL_COVECTOR_CELLS, PSEUDOVERTICES, POINTS {
 		compute_maximal_covectors($this);
-	}	
+	}
 	weight 2.10;
 
 	rule PSEUDOVERTEX_COVECTORS : PSEUDOVERTICES, POINTS {

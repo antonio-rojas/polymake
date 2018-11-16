@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -53,15 +53,8 @@ struct StructUtils {
 
 namespace polymake { namespace perl_bindings {
 
-template <typename T, typename Struct>
-recognized<std::is_same<T, Struct>::value>* recognize(SV** proto_p, bait*, T*, GenericStruct<Struct>*)
-{
-   *proto_p=pm::perl::get_parameterized_type<typename Struct::field_types>("Polymake::common::Tuple", std::is_same<T, Struct>());
-   return nullptr;
-}
-
 template <typename Struct>
-SV* field_names(bait*, GenericStruct<Struct>*)
+SV* member_names(bait, GenericStruct<Struct>*)
 {
    return pm::perl::StructUtils<Struct>::field_names();
 }

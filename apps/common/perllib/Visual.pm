@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -33,7 +33,7 @@ sub prepare_visual_objects {
 #
 sub visualize($) {
    my $first=shift;
-   return $first if defined wantarray;
+   return $first if defined(wantarray) or $INC{"Polymake/Test.pm"} and $Polymake::Test::disable_viewers;
    my @args=prepare_visual_objects($first);
 
    my $title=$first->Title // $first->Name;
@@ -42,7 +42,7 @@ sub visualize($) {
    if (@args==1) {
       eval {
          if (is_object($args[0])) {
-            # a single object to draw - can use the overloading directly
+            # a single object to draw
             $method=Overload::Global::draw($args[0]);
             $viewer=method_owner($method)->new;
             $method->($viewer->new_drawing($title, $first), $args[0]);
@@ -73,13 +73,12 @@ sub visualize($) {
       # first obtain all viable visualizers, even if not preferred
       $obj=$args[0];
       my ($viewer_pkg, @methods);
-      if (defined (my $list=Overload::resolve_labeled("Polymake::Overload::Global", "draw",
-                                                      [ is_object($obj) ? $obj : $obj->[0], undef ]))) {
+      if (defined (my $control_list=Overload::resolve_global("draw",
+                      [ is_object($obj) ? $obj : $obj->[0], undef ]))) {
          # must try all visualizers in the preference order until find such a one
          # that can cope with all drawable objects
        TRY:
-         foreach my $sub (is_object($list) ? $list->get_items : ($list)) {
-            $method=&$sub;
+         foreach my $method (@{$control_list->items}) {
             @methods=($method);
             $viewer_pkg=method_owner($method);
             foreach $obj (@args[1..$#args]) {
@@ -172,7 +171,12 @@ bundle them with compose() like this:  $caller_sub(compose(VISUAL1, VISUAL2, ...
       }
    }
 
-   $viewer->run;
+   if (defined(wantarray) && !defined($to_file)) {
+      return $viewer;
+   }
+
+   $viewer->run
+      unless $INC{"Polymake/Test.pm"} and $Polymake::Test::disable_viewers;
 
    if (defined $to_file) {
       $viewer->file
@@ -185,36 +189,63 @@ bundle them with compose() like this:  $caller_sub(compose(VISUAL1, VISUAL2, ...
 ############################################################################
 package Visual;
 
-my %RGBtxt;
+# a few basic colors from the X11 color names (rgb.txt)
+# plus some used directly in the code or the testsuite
+my %backupcolors = (
+      black    => "000000",
+      white    => "ffffff",
+      gray     => "bebebe",
+      red      => "ff0000",
+      green    => "00ff00",
+      blue     => "0000ff",
+      yellow   => "ffff00",
+      magenta  => "ff00ff",
+      cyan     => "00ffff",
+      pink     => "ffc0cb",
+      purple   => "a020f0",
+      orange   => "ffa500",
+      lavenderblush  => "fff0f5",
+      indianred      => "cd5c5c",
+      darkolivegreen => "556b2f",
+      midnightblue   => "191970",
+      lightslategrey => "778899",
+      azure          => "f0ffff",
+      lightgreen     => "90ee90",
+      plum1          => "ffbbff",
+      salmon1        => "ff8c69",
+      chocolate1     => "ff7f24",
+);
 
-sub loadRGBtxt {
-   die "color list rgb.txt not found, can't use symbolic color names\n"
-      unless $Visual::Color::RGBtxt_path;
-   open my $RGB, $Visual::Color::RGBtxt_path
-      or die "can't parse color list $Visual::Color::RGBtxt_path: $!\n";
-   local $/="\n";
-   local ($_, $1, $2);
-   while (<$RGB>) {
-      next if /^\s* (?: ! | $ )/x;
-      if (/^ \s* (\d+) \s+ (\d+) \s+ (\d+) \s+ ([a-zA-Z]\w+ (?:\s+ [a-zA-Z]\w+)*) \s* $/x) {
-         $RGBtxt{$4}=[ $1, $2, $3 ];
-      }
-   }
+my %X11colornames;
+
+sub loadX11names {
+   %X11colornames or eval {
+      require Graphics::ColorNames;
+      tie %X11colornames, 'Graphics::ColorNames', (qw( X ));
+   };
 }
 
 sub get_sym_color {
-   loadRGBtxt unless keys %RGBtxt;
-   if (defined (my $c=$RGBtxt{$_[0]})) {
-      new RGB(map { int($_+0) } @$c);
-   } else {
-      undef
+   if (defined (my $c=$Visual::Color::symbolicnames{$_[0]})) {
+      return new RGB($c);
    }
+   my $colorname = lc($_[0]);
+   loadX11names;
+   if (defined (my $c = $X11colornames{$colorname} // $backupcolors{$colorname})) {
+      return new RGB("#".$c);
+   }
+   warn "Only basic color names available, check TAB-completion for a list.\n",
+        "To use the full set of X11 color names please install the perl module Graphics::ColorNames.\n",
+        "You can also define custom names using the custom variable \%Visual::Color::symbolicnames.\n"
+      unless %X11colornames;
+
+   undef;
 }
 
 sub list_color_completions {
-   my $prefix=shift;
-   loadRGBtxt unless keys %RGBtxt;
-   grep { /^\Q$prefix\E/ } keys %RGBtxt;
+   my $prefix=lc shift;
+   loadX11names;
+   grep { lc =~ /^\Q$prefix\E/ } (keys %Visual::Color::symbolicnames, %X11colornames ? keys %X11colornames : keys %backupcolors );
 }
 
 sub get_RGB {
@@ -233,6 +264,28 @@ sub print3dcoords {
    my $c=$_[1] || " ";
    sprintf "%.6g$c%.6g$c%.6g", @{$_[0]}, 0;
 }
+
+sub transform_float {
+    my ($MM,$T,$v) = @_; # Matrix<Float> (dehomogenized), Matrix<Float>, Vector<Float>
+    if (defined($T)) {
+        die "transformation invalid" unless $MM->cols()==$T->rows() && $T->cols()<=3;
+        $MM = $MM*$T;
+    }
+    if (defined($v)) {
+        die "offset invalid" unless $MM->cols()==$v->dim() && $v->dim()<=3;
+        for (my $i=0; $i<$MM->rows(); ++$i) { $MM->[$i] = $MM->[$i]+$v }
+    }
+    return $MM;
+}
+
+sub transform_float_facets {
+    my ($FF,$T,$v) = @_; # Matrix<Float>, Matrix<Float>, Vector<Float>
+    my $vv = defined($v) ? new Vector<Float>(1|$v) : unit_vector<Float>($FF->cols(),0);
+    my $TT = defined($T) ? $vv/(zero_vector<Float>()|$T) : unit_matrix<Float>($FF->cols());
+    $FF = $FF*transpose(inv($TT));
+    return $FF;
+}
+
 
 ###############################################################################
 #
@@ -354,7 +407,9 @@ sub unify_decor {
       !defined($decor)
       ?  $default :
       is_container($decor)
-      ?  sub { get_RGB($decor->[$_[0]]) } :
+      ?  (is_code($default)
+          ?  sub { my $c=$decor->[$_[0]]; defined($c) ? get_RGB($c) : &$default }
+          :  sub { my $c=$decor->[$_[0]]; defined($c) ? get_RGB($c) : $default } ) :
       is_hash($decor)
       ?  (is_code($default)
           ?  sub { my $c=$decor->{$_[0]}; defined($c) ? get_RGB($c) : &$default }
@@ -456,7 +511,7 @@ use Polymake::Struct (
    [ '\$file' => '#1 // &Visual::FileWriter::prompt_filename' ],
 );
 .
-   my $symtab=get_pkg($pkg);
+   my $symtab=get_symtab($pkg);
    define_function($symtab, "graphics", \&self);
    define_function($symtab, "run", \&run);
    define_function($symtab, "multiple", sub { $multiple });

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -238,7 +238,7 @@ Matrix<Integer> transformation_matrix(int d, transformation_type t, const Array<
       T(0,0) = 1;
    } else {
       int objit = 0;
-      for (Entire< Rows<Matrix<Integer> > >::iterator rit = entire(rows(T)); !rit.at_end(); ++rit, ++objit)
+      for (auto rit = entire(rows(T)); !rit.at_end(); ++rit, ++objit)
          switch (t) {
          case kvec_to_cd:
             *rit = kvec_combination(objit, d, Fib);

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -17,43 +17,85 @@
 #ifndef POLYMAKE_PERL_CONSTANTS_H
 #define POLYMAKE_PERL_CONSTANTS_H
 
-#ifdef __cplusplus
-
 #include "polymake/AnyString.h"
 
 namespace pm { namespace perl {
-#endif
 
-enum value_flags {
-   value_mutable=0, value_read_only=1, value_expect_lval=2, value_alloc_magic=4,
-   value_allow_undef=8, value_allow_non_persistent=16, value_ignore_magic=32,
-   value_trusted=0, value_not_trusted=64, value_allow_conversion=128,
-   value_allow_store_ref=256, value_allow_store_temp_ref=512,
-   value_allow_store_any_ref=value_allow_store_ref|value_allow_store_temp_ref
+enum class ValueFlags {
+   is_mutable=0, read_only=1, alloc_magic=2, expect_lval=4,
+   allow_undef=8, allow_non_persistent=16, ignore_magic=32,
+   is_trusted=0, not_trusted=64, allow_conversion=128,
+   allow_store_ref=256, allow_store_temp_ref=512,
+   allow_store_any_ref=allow_store_ref|allow_store_temp_ref
 };
 
-enum class_kind {
-   class_is_scalar, class_is_container, class_is_composite, class_is_opaque, class_is_kind_mask=0xf,
-   class_is_assoc_container=0x100, class_is_sparse_container=0x200, class_is_set=0x400,
-   class_is_serializable=0x800, class_is_declared=0x1000
+enum class ClassFlags {
+   none=0,
+   is_scalar=0, is_container, is_composite, is_opaque, kind_mask=0xf,
+   is_assoc_container=0x100, is_sparse_container=0x200, is_set=0x400,
+   is_serializable=0x800, is_sparse_serialized=0x1000, is_declared=0x2000
 };
 
-#ifdef __cplusplus
+enum class Returns {
+   normal,
+   lvalue,
+   list,
+   empty  // should be void but it's a reserved keyword
+};
 
-constexpr value_flags operator| (value_flags a, value_flags b)
+// function argument reference classification
+enum {
+   arg_is_const_ref,
+   arg_is_lval_ref,
+   arg_is_univ_ref,
+   arg_is_const_or_rval_ref
+};
+
+constexpr ValueFlags operator| (ValueFlags a, ValueFlags b)
 {
-   return static_cast<value_flags>(int(a) | int(b));
+   return static_cast<ValueFlags>(int(a) | int(b));
+}
+
+constexpr ValueFlags operator& (ValueFlags a, ValueFlags b)
+{
+   return static_cast<ValueFlags>(int(a) & int(b));
+}
+
+constexpr bool operator* (ValueFlags a, ValueFlags b)
+{
+   return (int(a) & int(b)) != 0;
+}
+
+constexpr ClassFlags operator| (ClassFlags a, ClassFlags b)
+{
+   return static_cast<ClassFlags>(int(a) | int(b));
+}
+
+constexpr ClassFlags operator& (ClassFlags a, ClassFlags b)
+{
+   return static_cast<ClassFlags>(int(a) & int(b));
+}
+
+constexpr bool operator* (ClassFlags a, ClassFlags b)
+{
+   return (int(a) & int(b)) != 0;
 }
 
 inline
-value_flags& operator|= (value_flags& a, value_flags b)
+ValueFlags& operator|= (ValueFlags& a, ValueFlags b)
+{
+   a = a | b;
+   return a;
+}
+
+inline
+ClassFlags& operator|= (ClassFlags& a, ClassFlags b)
 {
    a = a | b;
    return a;
 }
 
 } }
-#endif
 
 #endif // POLYMAKE_PERL_CONSTANTS_H
 

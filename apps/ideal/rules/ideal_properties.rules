@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -25,9 +25,13 @@ object Ideal {
    property DEPTH : Int;
 
    # @category Commutative algebra
-   # The dimension of the ideal, i.e. the Krull dimension of [[RING]]/Ideal.
+   # The dimension of the ideal, i.e. the Krull dimension of Polynomial ring/Ideal.
    # @depends singular
    property DIM : Int;
+
+	# @category Commutative algebra
+	# The number of variables of the polynomial ring containing the ideal.
+	property N_VARIABLES : Int;
 
    # @category Input properties
    # A set of generators usually given by the user and not unique.
@@ -74,10 +78,6 @@ object Ideal {
    # The radical of the ideal.
    # @depends singular
    property RADICAL : Ideal;
-
-   # @category Commutative algebra
-   # The ambient (polynomial) ring containing the ideal.
-   property RING : Ring;
 
    # @category Commutative algebra
    # True if the ideal is the zero ideal.

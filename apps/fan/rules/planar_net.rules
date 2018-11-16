@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -24,14 +24,14 @@ property POLYTOPE : polytope::Polytope<Scalar>;
 # Counter clockwise ordering of the [[VERTICES]] in each [[MAXIMAL_POLYTOPES]].
 # This is a copy of the property [[Polytope::VIF_CYCLIC_NORMAL]] of [[POLYTOPE]].
 
-property VIF_CYCLIC_NORMAL : Array< Array<Int> >;
+property VIF_CYCLIC_NORMAL : Array<Array<Int>>;
 
 # @category Combinatorics
 # Map which tells which vertex/facet pair of the 3-polytope is mapped to which vertex of the planar net.
 # The dependence on the facets comes from the fact that most [[Polytope::VERTICES]] occur more than once in the planar net.
 # The inverse is [[VF_MAP_INV]].
 
-property VF_MAP : Map< Pair<Int,Int>, Int >;
+property VF_MAP : Map<Pair<Int,Int>,Int>;
 
 # @category Combinatorics
 # Map which tells how the [[VERTICES]] of the planar net are mapped to the [[Polytope::VERTICES]] of the 3-polytope.
@@ -44,14 +44,14 @@ property VF_MAP_INV : Array<Int>;
 # Endoded as a list of edges, directed away from the root facet.
 # Indices correspond to [[MAXIMAL_POLYTOPES]] as well as [[Polytope::FACETS]].
 
-property DUAL_TREE : Array< Pair<Int,Int> >;
+property DUAL_TREE : Array<Pair<Int,Int>>;
 
 # @category Combinatorics
 # List of directed edges in the primal graph [[Polytope::GRAPH]] which need flaps for gluing.
 # Indices correspond to [[VERTICES]].  The orientation is chosen such that the facet in the layout is always on the left.
 # In fact, the flaps define a spanning tree of [[Polytope::GRAPH]].
 
-property FLAPS : Array< Pair<Int,Int> >;
+property FLAPS : Array<Pair<Int,Int>>;
 
 rule VIF_CYCLIC_NORMAL : POLYTOPE.VIF_CYCLIC_NORMAL {
    $this->VIF_CYCLIC_NORMAL(temporary) = $this->POLYTOPE->VIF_CYCLIC_NORMAL;
@@ -210,9 +210,9 @@ user_method VISUAL(%Visual::Polygons::decorations) : VERTICES, MAXIMAL_POLYTOPES
       $dependmap{$f} += $depend;
    }
    my ($first,$second) = @$vf_map_inv[0..1];
-   my $rootfirst = convert_to<Float>($this->POLYTOPE->VERTICES->[$first]->slice(1));
-   my $edge = (convert_to<Float>($this->POLYTOPE->VERTICES->[$second]->slice(1))) - $rootfirst;
-   my $rootnormal = convert_to<Float>(-1 * $this->POLYTOPE->FACETS->[$this->DUAL_TREE->[0]->first]->slice(1));
+   my $rootfirst = convert_to<Float>($this->POLYTOPE->VERTICES->[$first]->slice(range_from(1)));
+   my $edge = convert_to<Float>($this->POLYTOPE->VERTICES->[$second]->slice(range_from(1))) - $rootfirst;
+   my $rootnormal = convert_to<Float>(-1 * $this->POLYTOPE->FACETS->[$this->DUAL_TREE->[0]->first]->slice(range_from(1)));
    my $rootup = [ $rootnormal->[1] * $edge->[2] - $rootnormal->[2] * $edge->[1],
                   $rootnormal->[2] * $edge->[0] - $rootnormal->[0] * $edge->[2],
                   $rootnormal->[0] * $edge->[1] - $rootnormal->[1] * $edge->[0] ];

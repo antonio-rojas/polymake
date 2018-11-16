@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -51,25 +51,24 @@ namespace {
      const int dimU=U.rows()-1;
      Matrix<double> V=unit_matrix<double>(colsM+1);
      const int dimV=V.rows()-1;
-     for (int i=0; i<=std::min(rowsM,colsM); i++) // check "<"
+     for (int i=0; i<=std::min(rowsM,colsM); i++) { // check "<"
         {
-    
-           const Vector<double>v=M.col(i).slice(i);
-           const Matrix<double>Ui=householder_trafo(v);
-           const Matrix<double>M1=non_zero_sign(v[0])*Ui*M.minor(range(i,rowsM),range(i,colsM));
-           M.minor(range(i,rowsM),range(i,colsM))=M1;
-           const Matrix<double>U1=non_zero_sign(v[0])*Ui*U.minor(range(i,dimU),range(0,dimU)); 
-           U.minor(range(i,dimU),range(0,dimU))=U1;
-    
-           if (i<=colsM-2){
-              const Vector<double>v=M.row(i).slice(i+1);
-              const Matrix<double>Vi=householder_trafo(v);
-              const Matrix<double>M1=non_zero_sign(v[0])*M.minor(range(i,rowsM),range(i+1,colsM))*Vi;
-              M.minor(range(i,rowsM),range(i+1,colsM))=M1;
-              const Matrix<double>V1=non_zero_sign(v[0])*V.minor(range(0,dimV),range(i+1,dimV))*Vi;
-              V.minor(range(0,dimV),range(i+1,dimV))=V1;
-           }
-        } 
+           const Vector<double> v = M.col(i).slice(range_from(i));
+           const Matrix<double> Ui = householder_trafo(v);
+           const Matrix<double> M1 = non_zero_sign(v[0])*Ui*M.minor(range(i,rowsM),range(i,colsM));
+           M.minor(range(i,rowsM),range(i,colsM)) = M1;
+           const Matrix<double> U1 = non_zero_sign(v[0])*Ui*U.minor(range(i,dimU),range(0,dimU));
+           U.minor(range(i,dimU),range(0,dimU)) = U1;
+        }
+        if (i<=colsM-2) {
+           const Vector<double> v = M.row(i).slice(range_from(i+1));
+           const Matrix<double> Vi = householder_trafo(v);
+           const Matrix<double> M1 = non_zero_sign(v[0])*M.minor(range(i,rowsM),range(i+1,colsM))*Vi;
+           M.minor(range(i, rowsM), range(i+1, colsM)) = M1;
+           const Matrix<double>V1=non_zero_sign(v[0])*V.minor(range(0,dimV),range(i+1,dimV))*Vi;
+           V.minor(range(0,dimV),range(i+1,dimV))=V1;
+        }
+     }
      //V=T(V);
      matrixTriple biDuv; // fixme: constructor
      biDuv.diag=M;
@@ -181,8 +180,7 @@ namespace {
          double dm =biDuv.diag[rowsM-2][colsM-2];
          double fm=biDuv.diag[rowsM-2][colsM-1];
          double dn=biDuv.diag[rowsM-1][colsM-1];
-         double fmMinus1=biDuv.diag[rowsM-3][colsM-2];
-         lambda=eigenValuesOfT(dm,dn,fm,fmMinus1);
+         lambda=rowsM > 2 ? eigenValuesOfT(dm,dn,fm,biDuv.diag[rowsM-3][colsM-2]) : 0;
          
          for (int i=0; i<=colsDiag-2; i++) {
             Set<int> setij(i);
@@ -273,7 +271,7 @@ namespace {
       const int dimQ=Q.cols()-1;
       for (int i=0; i<=colsM; i++) 
       {
-         Vector<double>v=M.col(i).slice(i);
+         Vector<double>v=M.col(i).slice(range_from(i));
          Matrix<double>Qi=householder_trafo(v);
          Matrix<double>M1=Qi*M.minor(range(i,rowsM),range(i,colsM));
          M.minor(range(i,rowsM),range(i,colsM))=M1;

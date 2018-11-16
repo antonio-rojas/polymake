@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -63,12 +63,14 @@ number convert_Rational_to_number(const Rational& r)
    return res;
 }
 
-std::pair<ListMatrix<Vector<int> >, std::vector<Rational> > convert_poly_to_matrix_and_vector(const poly q){
+std::pair<std::vector<Rational>, ListMatrix<Vector<int>>> convert_poly_to_vector_and_matrix(const poly q)
+{
    poly p = pCopy(q);
+   poly pfull = p;
    int n = rVar(currRing);
-   ListMatrix<Vector<int> > exponents(0,n);
+   ListMatrix<Vector<int>> exponents(0,n);
    std::vector<Rational> coefficients;
-   while(p != NULL){
+   while (p != NULL) {
       number c = pGetCoeff(p);
       coefficients.push_back(convert_number_to_Rational(c, currRing));
       Vector<int> monomial(n);
@@ -78,24 +80,25 @@ std::pair<ListMatrix<Vector<int> >, std::vector<Rational> > convert_poly_to_matr
       exponents /= monomial;
       pIter(p);
    }
-   p_Delete(&p,currRing);
-   return std::pair<ListMatrix<Vector<int> >, std::vector<Rational> >(exponents, coefficients);
+   p_Delete(&pfull,currRing);
+   return { std::move(coefficients), std::move(exponents) };
 }
 
-Polynomial<> convert_poly_to_Polynomial(const poly q, const Ring<>& r){
-   std::pair<ListMatrix<Vector<int> >, std::vector<Rational> > decomposed = convert_poly_to_matrix_and_vector(q);
-   return Polynomial<>(decomposed.first, decomposed.second, r);
+Polynomial<> convert_poly_to_Polynomial(const poly q)
+{
+   const auto decomposed = convert_poly_to_vector_and_matrix(q);
+   return Polynomial<>(decomposed.first, decomposed.second);
 }
 
 
 poly convert_Polynomial_to_poly(const Polynomial<>& mypoly, ring ring){
    poly p = p_ISet(0,ring);
-   for(Entire<Polynomial<>::term_hash>::const_iterator term = entire(mypoly.get_terms()); !term.at_end(); ++term)
+   for (const auto& term : mypoly.get_terms())
    {
-      poly monomial = p_NSet(convert_Rational_to_number(term->second),ring);
-      for(int k = 0; k<term->first.dim(); k++)
+      poly monomial = p_NSet(convert_Rational_to_number(term.second), ring);
+      for (int k = 0; k < term.first.dim(); ++k)
       {
-         p_SetExp(monomial,k+1,term->first[k],ring);
+         p_SetExp(monomial, k+1, term.first[k], ring);
       }
       p_Setm(monomial,ring);
       p = p_Add_q(p, monomial,ring);

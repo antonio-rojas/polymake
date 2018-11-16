@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -59,7 +59,7 @@ bool is_boundary_ridge(const facet_vector& C, const Set<int>& F)
 int num_boundary_ridges(const facet_vector& C, const Set<int>& facet)
 {
    int num = 0;
-   for(Subsets_less_1<const Set<int>&>::const_iterator i=all_subsets_less_1(facet).begin();  !i.at_end(); ++i) {
+   for (auto i=entire(all_subsets_less_1(facet));  !i.at_end(); ++i) {
       if (is_boundary_ridge(C,*i)) ++num;
    }
    return num;

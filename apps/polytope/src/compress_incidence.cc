@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -132,8 +132,8 @@ void compress_incidence_dual(perl::Object p)
    p.take("RAYS_IN_FACETS") << VIF;
 }
 
-FunctionTemplate4perl("compress_incidence_primal<Scalar> (Cone<Scalar>) : void");
-FunctionTemplate4perl("compress_incidence_dual<Scalar> (Cone<Scalar>) : void");
+FunctionTemplate4perl("compress_incidence_primal<Scalar> (Cone<Scalar>)");
+FunctionTemplate4perl("compress_incidence_dual<Scalar> (Cone<Scalar>)");
 
 } }
 

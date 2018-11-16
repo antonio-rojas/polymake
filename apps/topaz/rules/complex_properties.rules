@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2016
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitae Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -37,7 +37,10 @@ declare property_type HomologyGroup<Scalar> : c++ (include => "polymake/topaz/Ho
 declare property_type CycleGroup<Scalar> : c++ (include => "polymake/topaz/HomologyComplex.h");
 
 # @category Topology
-# TODO: explain the meaning of the fields: parity, positive, negative
+#
+# Parity and signature of the intersection form of a closed oriented 4k-manifold.
+# See [[INTERSECTION_FORM]].
+
 declare property_type IntersectionForm : c++ (include => "polymake/topaz/IntersectionForm.h");
 
 object SimplicialComplex {
@@ -84,6 +87,27 @@ user_method labeled_vertices {
    } else {
       die "No VERTEX_LABELS stored in this complex";
    }
+}
+
+# @category Combinatorics
+# Output the boundary matrix of dimension __d__. Indexing is according to
+# the face indices in the HASSE_DIAGRAM of the complex.
+# The matrix is a map via multiplying it to a vector from the __left__.
+# Beware, this computes the whole face lattice of your complex, which is expensive.
+# @param Int d Dimension of the boundary matrix.
+# @return SparseMatrix<Integer>
+# @example This prints the boundary matrix of the 3-simplex:
+# > print simplex(3)->boundary_matrix(1);
+# | -1 1 0 0
+# | -1 0 1 0
+# | 0 -1 1 0
+# | -1 0 0 1
+# | 0 -1 0 1
+# | 0 0 -1 1
+# The output can be interpreted like this: the zeroth column of the matrix corresponds
+# to the facet with index 0, which contains the edges with indices 0,1 and 3.
+user_method boundary_matrix {
+   return boundary_matrix_cpp(@_);
 }
 
 # @category Combinatorics
@@ -234,7 +258,11 @@ rule nonexistent : COCYCLES : VertexPerm.COCYCLES, VertexPerm.PERMUTATION;
 
 
 # @category Topology
-# Parity and signature of the intersection form of a closed oriented 4-manifold.
+#
+# The integral quadratic form obtained from restricting the multiplication of the cohomology of a closed
+# 4k-manifold to H^{2k} x H^{2k} -> H^{4k} = Z.  As a quadratic form over the reals it is characterized
+# by its dimension and its index of inertia (or, equivalenty, by the number of positive and negative ones
+# in its canonical form).  An integral quadratic form is even if it takes values in 2Z.
 property INTERSECTION_FORM : IntersectionForm;
 
 
@@ -277,8 +305,7 @@ property ORIENTED_PSEUDO_MANIFOLD : Bool;
 # @category Topology
 # An orientation of the facets of an [[ORIENTED_PSEUDO_MANIFOLD]], such that the induced orientations
 # of a common ridge of two neighboring facets cancel each other out. Each facet is marked with //true//
-# if the orientation is given by the increasing vertex ordering and is marked with //false// if the
-# orientation is obtained from the increasing vertex ordering by a transposition.
+# if the orientation agrees with the (chosen) orientation of the first facet, and is marked with //false// otherwise.
 
 property ORIENTATION : Array<Bool>;
 
@@ -343,14 +370,22 @@ rule DUAL_GRAPH.NodePerm.PERMUTATION = FacetPerm.PERMUTATION;
 # of the next dimension. An artificial top node is added to represent
 # the entire complex.
 
-property HASSE_DIAGRAM : FaceLattice;
+property HASSE_DIAGRAM : Lattice<BasicDecoration> {
 
-rule HASSE_DIAGRAM : VertexPerm.HASSE_DIAGRAM, VertexPerm.PERMUTATION {
-   $this->HASSE_DIAGRAM=permuted_atoms($this->VertexPerm->HASSE_DIAGRAM, $this->VertexPerm->PERMUTATION);
-}
+   user_method dim {
+      return shift->rank()-1;
+   }
 
-rule HASSE_DIAGRAM : FacetPerm.HASSE_DIAGRAM, FacetPerm.PERMUTATION {
-   $this->HASSE_DIAGRAM=permuted_coatoms($this->FacetPerm->HASSE_DIAGRAM, $this->FacetPerm->PERMUTATION);
+   user_method nodes_of_dim($) {
+      my ($this,$d) = @_;
+      return shift->nodes_of_rank($d+1);
+   }
+
+   user_method nodes_of_dim_range($,$) {
+      my ($this,$d1,$d2) = @_;
+      return shift->nodes_of_rank_range($d1+1,$d2+1);
+   }
+
 }
 
 # @category Topology
@@ -370,14 +405,33 @@ property GENUS : Int;
 
 property LOCALLY_STRONGLY_CONNECTED : Bool;
 
+#compute the VERTEX_MAP of a subcomplex given a permutation and the VertexPerm.VERTEX_MAP
+sub compute_vertex_map_perm{
+   my ($perm, $perm_map) = (@_);
+   my $s = $perm_map->size();
+   my $map = new Array<Int>($s);
+
+   for(my $i = 0; $i < $s; ++$i){
+      $map->[$i] = $perm->[$perm_map->[$i]];
+   }
+   return $map;
+}
+
 
 # @category Combinatorics
 # Codimension-1-faces of a [[PSEUDO_MANIFOLD]] which are contained in one facet only.
 
-property BOUNDARY : SimplicialComplex;
+property BOUNDARY : self {
 
-rule BOUNDARY.VertexPerm.PERMUTATION = VertexPerm.PERMUTATION;
+   # @category Combinatorics
+   # Maps vertices of the boundary complex to the corresponding ones in the supercomplex
+   property VERTEX_MAP : Array<Int>;
 
+}
+
+rule BOUNDARY.VERTEX_MAP : VertexPerm.PERMUTATION, VertexPerm.BOUNDARY.VERTEX_MAP {
+   $this->BOUNDARY->VERTEX_MAP = compute_vertex_map_perm($this->VertexPerm->PERMUTATION, $this->VertexPerm->BOUNDARY->VERTEX_MAP);
+}
 
 # @category Topology
 # Edge-subset of a 3-sphere which is a knot or link, that is, a collection of pairwise disjoint cycles.
@@ -408,20 +462,27 @@ property PROJ_DICTIONARY : Array<Int>;
 
 rule nonexistent : PROJ_DICTIONARY : VertexPerm.PROJ_DICTIONARY, VertexPerm.PERMUTATION;
 
+# @category Symmetry
+property GROUP : group::Group : multiple {
+}
+
 }
 
 # A geometric simplicial complex, i.e., a simplicial complex with a geometric realization.
 # //Scalar// is the numeric data type used for the coordinates.
 # @tparam Scalar default: [[Rational]]
-declare object GeometricSimplicialComplex<Scalar=Rational> : SimplicialComplex;
+declare object GeometricSimplicialComplex<Scalar=Rational> : SimplicialComplex {
 
-object GeometricSimplicialComplex {
 
 # Coordinates for the vertices of the simplicial complex, such that the complex is
 # embedded without crossings in some R<sup>e</sup>.  Vector (x<sub>1</sub>, .... x<sub>e</sub>) represents a point
 # in Euclidean e-space.
 property COORDINATES : Matrix<Scalar>;
 
+rule COORDINATES : VertexPerm.COORDINATES, VertexPerm.PERMUTATION {
+   $this->COORDINATES = permuted_rows($this->VertexPerm->COORDINATES, $this->VertexPerm->PERMUTATION);
+}
+weight 1.20;
 
 # Dimension e of the space in which the [[COORDINATES]] of the complex is embedded.
 property G_DIM : Int;
@@ -469,6 +530,14 @@ rule UNIMODULAR : FACETS, COORDINATES {
 rule N_UNIMODULAR : FACETS, COORDINATES {
   $this->N_UNIMODULAR=n_unimodular($this);
 }
+
+property BOUNDARY = override : self;
+
+rule BOUNDARY.COORDINATES : COORDINATES, BOUNDARY.VERTEX_MAP {
+   $this->BOUNDARY->COORDINATES(temporary) = $this->COORDINATES->minor($this->BOUNDARY->VERTEX_MAP, All);
+}
+
+rule BOUNDARY.G_DIM = G_DIM;
 
 }
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -38,7 +38,7 @@ void remove_redundant_cones(perl::Object f)
       f.take("MAXIMAL_CONES")<<max_cones;
 }
 
-Function4perl(&remove_redundant_cones,"remove_redundant_cones(PolyhedralFan) : void");
+Function4perl(&remove_redundant_cones,"remove_redundant_cones(PolyhedralFan)");
 
 } }
 

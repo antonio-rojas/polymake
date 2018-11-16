@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2016
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -13,7 +13,54 @@
 #  GNU General Public License for more details.
 #-------------------------------------------------------------------------------
 
-object Hypersurface { 
+declare object HypersurfaceRealPart {
+
+  # Sign distribution on the support of the [[POLYNOMIAL]].
+  property SIGNS : Vector<Bool>;
+
+  # Facets of the real part of the tropical hypersurface.
+  # Each row gives the indices of those facets of the original trop. hypersurface,
+  # which are present in the orthant described by the binary expression of the row number.
+  # E.g. in dimension 3, the 6th row will hold the facets present in the orthant [0,1,1].
+  property FACETS : IncidenceMatrix<NonSymmetric>;
+
+  permutation TermPerm : PermBase;
+
+  permutation ConesPerm : PermBase;
+
+  rule FACETS : ConesPerm.FACETS, ConesPerm.PERMUTATION {
+    $this->FACETS=permuted_cols($this->ConesPerm->FACETS, $this->ConesPerm->PERMUTATION);
+  }
+  # weight 1.10;
+
+  rule SIGNS : TermPerm.SIGNS, TermPerm.PERMUTATION {
+    $this->SIGNS=permuted($this->TermPerm->SIGNS, $this->TermPerm->PERMUTATION);
+  }
+  # weight 1.10;
+
+  # @param String method "translate" (default) or "barycenter" (only for curves)
+  # @return fan::PolyhedralComplex<Rational>
+  # The real part of the hypersurface realized as a polyhedral hypersurface in IR^dim.
+  # Each of the 2^dim parts will be moved to the interior of the respective orthant
+  # (according to method), and relevant unbounded facets will be joined.
+  # If method is "translate", each part will simply be translated,
+  # if it's "barycenter", each parts vertices will be moved to the barycenter
+  # of the respective dual cell in the dual subdivision of the support (only works for curves).
+  # TODO example
+  user_method realize(;String = "translate") : FACETS {
+    # TODO exception if deg>1 & method="barycenter"
+    my ($this, $method) = @_;
+    return real_part_realize($this->parent->MONOMIALS, $this->parent->COEFFICIENTS, $this->parent->VERTICES, $this->parent->MAXIMAL_POLYTOPES, $this->parent->FAR_VERTICES, $this->FACETS, $method);
+  }
+
+  # TODO 
+  # user_method facets_in( $ ) {
+  # }
+
+}
+
+# @Category Combinatorics
+object Hypersurface {
 
 # Homogeneous tropical polynomial defining the hypersurface.
 
@@ -55,10 +102,10 @@ rule REDUNDANT_MONOMIALS : TermPerm.REDUNDANT_MONOMIALS, TermPerm.PERMUTATION {
 weight 1.10;
 
 # The __dome__ of a tropical polynomial \(F:\mathbb R^d\to\mathbb R\) (and the corresponding tropical hypersurface) is the set 
-# \[D(F)=\left\{(p,s)\in\mathbb R^{d+1}\mid p\in\mathbb R^d, s\in\mathbb R, s \oplus F(p) = s\right\}.\]
+# \[D(F)=\left\{(p,s)\in\mathbb R^{d+1}\mid p\in\mathbb R^d, s\in\mathbb R, s \oplus F(p) = s\right\}\].
 # It is an unbounded convex polyhedron, c.f.
 # 
-# 	Michael Joswig, [[http://page.math.tu-berlin.de/~joswig/etc/ETC-130412.pdf|Essentials of Tropical Combinatorics]], Chapter 1.
+# 	Michael Joswig, [[http://page.math.tu-berlin.de/~joswig/etc/|Essentials of Tropical Combinatorics]], Chapter 1.
 
 property DOME : polytope::Polytope<Rational>;
 
@@ -78,8 +125,7 @@ weight 0.10;
 incurs TermPerm;
 
 rule POLYNOMIAL : MONOMIALS, COEFFICIENTS {
-   my $ring = new Ring<TropicalNumber<Addition> >($this->MONOMIALS->cols());
-   $this->POLYNOMIAL = new Polynomial<TropicalNumber<Addition> >($this->MONOMIALS, $this->COEFFICIENTS,$ring);
+   $this->POLYNOMIAL = new Polynomial<TropicalNumber<Addition> >($this->COEFFICIENTS, $this->MONOMIALS);
 }
 weight 0.10;
 
@@ -117,6 +163,21 @@ precondition : PROJECTIVE_DIM {
    $this->PROJECTIVE_DIM == 1 
 }
 
+# @Category Combinatorics
+# The real part of the tropical hypersurface.
+property REAL_PART : HypersurfaceRealPart : multiple;
+
+rule REAL_PART.FACETS : REAL_PART.SIGNS, MONOMIALS, COEFFICIENTS, VERTICES, MAXIMAL_POLYTOPES {
+  $this->REAL_PART->FACETS = real_facets($this->REAL_PART->SIGNS, $this->MONOMIALS, $this->COEFFICIENTS, $this->VERTICES, $this->MAXIMAL_POLYTOPES);
+}
+
+rule REAL_PART.TermPerm.PERMUTATION : TermPerm.PERMUTATION {
+   $this->REAL_PART->TermPerm->PERMUTATION=$this->TermPerm->PERMUTATION;
+}
+
+rule REAL_PART.ConesPerm.PERMUTATION : ConesPerm.PERMUTATION {
+   $this->REAL_PART->ConesPerm->PERMUTATION=$this->ConesPerm->PERMUTATION;
+}
 
 } # object Hypersurface
 

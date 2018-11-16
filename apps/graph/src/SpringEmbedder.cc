@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -33,7 +33,7 @@ void SpringEmbedder::init_params(const perl::OptionSet& options)
    if (!(options["z-factor"] >> z_factor)) z_factor=1;
 
    if (options["z-ordering"] >> z_ordering) {
-      Entire< Vector<double> >::const_iterator obj=entire(z_ordering);
+      auto obj=entire(z_ordering);
       double z_order_min=*obj, z_order_max=z_order_min;
       while (!(++obj).at_end())
          pm::assign_min_max(z_order_min, z_order_max, *obj);
@@ -41,7 +41,7 @@ void SpringEmbedder::init_params(const perl::OptionSet& options)
       const double z_mid=(z_order_max+z_order_min)/2;
       z_order_max-=z_order_min;
       if (z_order_max > 1e-3*scale) {
-         for (Entire< Vector<double> >::iterator obj=entire(z_ordering); !obj.at_end(); ++obj)
+         for (obj=entire(z_ordering); !obj.at_end(); ++obj)
             *obj=(*obj-z_mid)/z_order_max;
       } else {
          z_ordering.clear();
@@ -57,7 +57,7 @@ void SpringEmbedder::init_params(const perl::OptionSet& options)
       min_edge_weight=std::numeric_limits<double>::infinity();
       avg_edge_weight=0;
 
-      for (Entire< std::vector<double> >::iterator e=entire(wanted_edge_length); !e.at_end(); ++e) {
+      for (auto e=entire(wanted_edge_length); !e.at_end(); ++e) {
          if (*e <= 0)
             throw std::runtime_error("non-positive edge length encountered");
          pm::assign_min(min_edge_weight, *e);
@@ -70,7 +70,7 @@ void SpringEmbedder::init_params(const perl::OptionSet& options)
       fill_range(entire(wanted_edge_length), avg_edge_weight);
    }
 
-   for (Entire< std::vector<double> >::iterator e=entire(wanted_edge_length), ie=entire(inv_wanted_length);
+   for (auto e=entire(wanted_edge_length), ie=entire(inv_wanted_length);
         !e.at_end(); ++e, ++ie)
       *ie=min_edge_weight/(*e);
 
@@ -110,14 +110,12 @@ void SpringEmbedder::restart(const Matrix<double>& X)
 void SpringEmbedder::calculate_forces(const Matrix<double>& X, RandomSpherePoints<double>& random_points, Matrix<double>& F)
 {
    Rows< Matrix<double> >::iterator f=rows(F).begin();
-   Entire< Vector<double> >::const_iterator z=entire(z_ordering);
+   auto z=entire(z_ordering);
    double new_z_min=X[0].back(), new_z_max=new_z_min;
    z_max-=z_min;
    if (gravity) barycenter.fill(0.);
 
-   for (Entire< Nodes< Graph<> > >::const_iterator this_node=entire(nodes(G));  
-        !this_node.at_end(); ++this_node, ++f) {
-
+   for (auto this_node=entire(nodes(G)); !this_node.at_end(); ++this_node, ++f) {
       f->fill(0.);
       if (gravity) barycenter += X[*this_node];
 
@@ -130,7 +128,7 @@ void SpringEmbedder::calculate_forces(const Matrix<double>& X, RandomSpherePoint
 
       Graph<>::out_edge_list::const_iterator edge=this_node.out_edges().begin();
 
-      for (Entire< Nodes< Graph<> > >::const_iterator n2=entire(nodes(G)); n2!=this_node; ++n2) {
+      for (auto n2=entire(nodes(G)); n2!=this_node; ++n2) {
          const Vector<double> delta = X[*n2] - X[*this_node];
          const double delta_sqr=sqr(delta);
          if (delta_sqr>epsilon_2) {
@@ -165,17 +163,20 @@ void SpringEmbedder::calculate_forces(const Matrix<double>& X, RandomSpherePoint
       if (!z_ordering.empty()) barycenter.back()=0;
    }
 
-   for (Entire< Set<int> >::const_iterator fi = entire(fixed_vertices); !fi.at_end(); ++fi)
+   for (auto fi = entire(fixed_vertices); !fi.at_end(); ++fi)
       F[*fi].fill(0);
 }
 
-static inline
+namespace {
+
 void calc_internal_constants(double& a, double& b, double& c, double& d, double viscosity, double inertion)
 {
    a=std::exp(-viscosity/inertion);
    b=(1-a)/viscosity;
    c=inertion*b;
    d=(1-c)/viscosity;
+}
+
 }
 
 bool SpringEmbedder::calculate(Matrix<double>& X, RandomSpherePoints<double>& random_points, int max_iterations)
@@ -197,8 +198,7 @@ bool SpringEmbedder::calculate(Matrix<double>& X, RandomSpherePoints<double>& ra
 
       int oscillated=0, moved=0;
       Rows< Matrix<double> >::iterator x=rows(X).begin(), f=rows(F).begin(), v=rows(V).begin();
-      for (Entire< Nodes< Graph<> > >::const_iterator this_node=entire(nodes(G));
-           !this_node.at_end();  ++this_node, ++x, ++f, ++v) {
+      for (auto this_node=entire(nodes(G)); !this_node.at_end();  ++this_node, ++x, ++f, ++v) {
 #if POLYMAKE_DEBUG
          if (debug_print) cout << '[' << *this_node << "]: x=(" << *x << "); f=(" << *f << "); v=(" << *v << ")\n";
 #endif

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -19,7 +19,7 @@
 #include "polymake/topaz/is_sphere_h.h"
 
 namespace polymake { namespace topaz {
-  
+
 // return values: 1=true, 0=false, -1=undef
 int is_ball_or_sphere_client(perl::Object p, bool check_for_sphere, perl::OptionSet options)
 {
@@ -43,13 +43,13 @@ int is_ball_or_sphere_client(perl::Object p, bool check_for_sphere, perl::Option
    }
 
    // heuristics begin
-   const HasseDiagram HD = p.give("HASSE_DIAGRAM");
+   const Lattice<BasicDecoration>& HD = p.give("HASSE_DIAGRAM");
 
    int strategy=options["strategy"];
    int n_stable_rounds=0; // meaningless initialization to avoid a compiler warning
    if (!(options["stable_rounds"] >> n_stable_rounds))
-      n_stable_rounds=(HD.dim()-1) * 1000; // default
-   
+      n_stable_rounds=(HD.rank()-2) * 1000; // default
+
    const bool verbose=options["verbose"];
    const RandomSeed seed(options["seed"]);
    UniformlyRandom<Integer> random_source(seed);

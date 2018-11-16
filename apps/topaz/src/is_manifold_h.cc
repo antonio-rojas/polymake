@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -22,22 +22,22 @@ namespace polymake { namespace topaz {
 
 int is_manifold_client(perl::Object p, perl::OptionSet options)
 {
-   const HasseDiagram HD = p.give("HASSE_DIAGRAM");
+   const Lattice<BasicDecoration>& HD = p.give("HASSE_DIAGRAM");
    const bool is_closed = p.give("CLOSED_PSEUDO_MANIFOLD");
-   
+
    const int strategy=options["strategy"];
    int n_stable_rounds=0; // meaningless initialization to avoid a compiler warning
    if (!(options["stable_rounds"] >> n_stable_rounds))
-      n_stable_rounds=(HD.dim()-1) * 1000;
+      n_stable_rounds=(HD.rank()-2) * 1000;
 
    const bool verbose=options["verbose"];
    const RandomSeed seed(options["seed"]);
    UniformlyRandom<Integer> random_source(seed);
 
    bool res_undef = false;
-   for (Entire<sequence>::iterator n=entire(HD.node_range_of_dim(0)); !n.at_end(); ++n) {
+   for (const auto n : HD.nodes_of_rank(1)) {
       int local_strategy = strategy;
-      const std::list< Set<int> > link=as_iterator_range(link_in_HD(HD,*n));
+      const std::list<Set<int>> link=as_iterator_range(link_in_HD(HD, n));
 
       bool is_bos= is_closed ? is_sphere_h(link, random_source, local_strategy, n_stable_rounds)
                              : is_ball_or_sphere_h(link, random_source, local_strategy, n_stable_rounds);
@@ -46,9 +46,9 @@ int is_manifold_client(perl::Object p, perl::OptionSet options)
          if (verbose)
             cout << "is_manifold_h: after " << n_stable_rounds
                  << " iterations without improvement:\nUnable to determine, whether link("
-                 << HD.face(*n) << ") is a ball or a sphere.\n"
+                 << HD.face(n) << ") is a ball or a sphere.\n"
                  << "Trying strategy " << local_strategy << "." << endl;
-         
+
          is_bos= is_closed ? is_sphere_h(link, random_source, local_strategy, n_stable_rounds)
                            : is_ball_or_sphere_h(link, random_source, local_strategy, n_stable_rounds);
       }
@@ -59,7 +59,7 @@ int is_manifold_client(perl::Object p, perl::OptionSet options)
          if (verbose)
             cout << "is_manifold_h: after " << n_stable_rounds
                  << " iterations without improvement:\nUnable to determine, whether link("
-                 << HD.face(*n) << ") is a ball or a sphere." << endl;
+                 << HD.face(n) << ") is a ball or a sphere." << endl;
 
          if (!options["all"])  break;
       }

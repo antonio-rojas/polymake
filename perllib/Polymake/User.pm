@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2016
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -15,6 +15,8 @@
 
 use strict;
 use namespaces;
+use warnings qw(FATAL void syntax misc);
+use feature 'state';
 
 package Polymake::User;
 
@@ -23,8 +25,12 @@ declare $application;
 sub application {
    if (@_>1) {
       die "usage: application [ \"name\" ]\n";
-   } elsif (@_) {
-      my $new_app=shift;
+   } elsif (my ($new_app)=@_) {
+
+      # This magic provides automatic loading of applications when they are first mentioned
+      # as a prefix of a user function in the shell input, in a script, documentation example, or tutorial.
+      state $register_autoload=namespaces::set_autolookup(\&Core::Application::try_auto_load);
+
       if (defined wantarray) {
          if (ref($new_app)) {
             warn_print( "application() call without effect as the application ", $new_app->name, " already loaded" );
@@ -40,22 +46,12 @@ sub application {
          }
          $application=$new_app;
          readonly($application);
-         namespaces::import_subs_from($_->eval_expr) for ($application, values %{$application->used});
       }
    } else {
       # tell the current application
       $application;
    }
 }
-
-namespaces::set_autolookup(
-  sub {
-     my ($pkg)=@_;
-     if ($pkg =~ /^($id_re)::\w/o) {
-        my $app_name=$1;
-        !lookup Core::Application($app_name) && defined(try_add Core::Application($app_name));
-     }
-  });
 
 #################################################################################
 sub include {
@@ -143,7 +139,25 @@ sub save {
 
    $obj->save;
 }
-
+#################################################################################
+sub save_schema {
+   if (@_<2) {
+      die "usage: save_schema(Object or ObjectType, ..., \"filename\"\n";
+   }
+   my $filename=pop;
+   if ($filename !~ /\.\w+$/) {
+      $filename .= ".rng";
+   }
+   replace_special_paths($filename);
+   my $xf=new Core::XMLfile($filename);
+   $xf->save_schema(map {
+           if (is_object($_) && UNIVERSAL::can($_, "type")) {
+              $_->type
+           } else {
+              die "argument ", ref($_) || "'$_'", " is not an object or a type expression\n";
+           }
+        } @_);
+}
 #################################################################################
 sub load_data {
    my ($filename)=@_;
@@ -245,9 +259,10 @@ sub script {
       # because all localizations have to occur in this block.
       defined($in_app)
         ? $in_app != $User::application && (local $User::application=$in_app,
-                                            ref($INC[0]) ? (local $INC[0]=$in_app) : local_unshift(\@INC, $in_app))
-        : (local_save_scalar($User::application),
-           ref($INC[0]) || local_unshift(\@INC, $User::application));
+                                            ref($INC[0]) ? (local $INC[0]=$in_app) : local_unshift(\@INC, $in_app)) :
+      defined(local_save_scalar($User::application))
+        ? ref($INC[0]) || local_unshift(\@INC, $User::application)
+        : ref($INC[0]) || local_unshift(\@INC, new Core::NeutralScriptLoader());
 
       $name="script" . (defined($in_app) ? ":" : "=") . $full_path;
       if (wantarray) {
@@ -265,10 +280,17 @@ sub script {
    }
 }
 #################################################################################
+# print boolean values in legible form: true and false instead of 1 and empty string
+# enforce creation of a unique lexical scope with this operation inherited by all nested packages
+use namespaces 'Polymake::User';
+namespaces::memorize_lexical_scope;
+namespaces::intercept_operation(undef, "P", "bool");
+
+#################################################################################
 # prepare for custom variables and preferences
 
 package Polymake::User::Verbose;
-*Polymake::Verbose::=get_pkg(__PACKAGE__);
+*Polymake::Verbose::=get_symtab(__PACKAGE__);
 
 push @Core::UserSettings::add_custom_vars,
 sub {

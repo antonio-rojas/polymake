@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -32,6 +32,7 @@ perl::Object integer_hull(perl::Object p_in)
   // compute the lattice points contained in the polyhedron
   // FIXME: use LATTICE_POINTS_GENERATORS instead
   Matrix<Rational> Lattice_Points = p_in.call_method("LATTICE_POINTS");
+  const int dim = p_in.give("CONE_AMBIENT_DIM");
 
   perl::Object p_out("Polytope<Rational>");
 
@@ -40,6 +41,7 @@ perl::Object integer_hull(perl::Object p_in)
   p_out.take("FEASIBLE") << (Lattice_Points.rows() > 0);
   p_out.take("BOUNDED") << true;
   p_out.take("POINTED") << true;
+  p_out.take("CONE_AMBIENT_DIM") << dim;
 
   return p_out;	
 }
@@ -48,7 +50,8 @@ UserFunction4perl("# @category Producing a polytope from polytopes"
                   "# Produces the integer hull of a polyhedron"
                   "# @param Polytope P"
                   "# @return Polytope"
-                  "# @example > $p = new Polytope(VERTICES=>[[1,1.3,0.5],[1,0.2,1.2],[1,0.1,-1.5],[1,-1.4,0.2]]);"
+                  "# @example [prefer cdd]" 
+                  "# > $p = new Polytope(VERTICES=>[[1,13/10,1/2],[1,1/5,6/5],[1,1/10,-3/2],[1,-7/5,1/5]]);"
                   "# > $ih = integer_hull($p);"
                   "# > print $ih->VERTICES;"
                   "# | 1 -1 0"

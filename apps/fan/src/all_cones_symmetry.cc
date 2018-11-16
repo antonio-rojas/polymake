@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -19,11 +19,16 @@
 #include "polymake/Matrix.h"
 #include "polymake/Set.h"
 #include "polymake/Array.h"
-#include "polymake/graph/HasseDiagram.h"
+#include "polymake/graph/Lattice.h"
+#include "polymake/graph/Decoration.h"
 #include "polymake/hash_set"
 #include "polymake/hash_map"
 
 namespace polymake { namespace fan {
+
+using graph::Lattice;
+using graph::lattice::Sequential;
+using graph::lattice::BasicDecoration;
 
 void all_cones_symmetry(perl::Object f, int dim)
 {
@@ -33,7 +38,7 @@ void all_cones_symmetry(perl::Object f, int dim)
    const Matrix<Rational> lin_space=f.give("LINEALITY_SPACE");
    const int lin_dim=lin_space.rows();
    const int amb_dim=rays.rows();
-  
+
 
    //if the dimension of the fan is unknown it will be computed in res_dim and amb_dim
    //is an upper bound
@@ -54,50 +59,50 @@ void all_cones_symmetry(perl::Object f, int dim)
    const int n_syms=symmetry[0].size();
    Array<std::vector<Set<int>>> cone_orbits(dim); // all cones up to symmetry
    Array<std::vector<int>> cone_orbit_sizes(dim); // the sizes of all arbits of cones
-   
-   int j=0;
+
+   int c_i = 0;
    for (const auto& cone : cones) {
       const int n_rays=cone.size();
       const Array<int> cone_A(n_rays, entire(cone));
       perl::Object c("Cone");
       c.take("RAYS") << rays.minor(cone, All);
       c.take("LINEALITY_SPACE") << lin_space;
-      const graph::HasseDiagram hd = c.give("HASSE_DIAGRAM");
-      const int c_dim(hd.dim()+1);
+      const Lattice<BasicDecoration, Sequential>& hd = c.give("HASSE_DIAGRAM");
+      const int c_dim(hd.rank());
       if (!dim_given) {
          res_dim = std::max(res_dim, c_dim);
-         max_cones_dims[j++] = c_dim + lin_dim;
+         max_cones_dims[c_i++] = c_dim + lin_dim;
       }
-      for (int l=0; l<c_dim; ++l) {
-         for(Entire<graph::HasseDiagram::nodes_of_dim_set>::const_iterator f=entire(hd.nodes_of_dim(l)); !f.at_end(); ++f) {
-            const Set<int> face_old = hd.face(*f);
-            
+      for (int l = 0; l < c_dim; ++l) {
+         for (const auto fn : hd.nodes_of_rank(l+1)) {
+            const Set<int>& face_old = hd.face(fn);
+
             Set<int> face;
             for (const auto& k : face_old) {
                face.insert(cone_A[k]);
             }
-            
-            if (all_cones[l].find(face)==all_cones[l].end()) {
-               //if the face does not exist so far, we create its whole orbit
-                int orbit_size=0;
-                for (int j=0; j<n_syms; ++j) {
-                   Set<int> new_cone;
-                   for (const auto& k : face) {
-                      new_cone.insert(symmetry[k][j]);
-                   }
-                   if (all_cones[l].insert(new_cone).second) {
-                      ++orbit_size;
-                      ++dims[l];
-                   }
-                }
-                cone_orbits[l].push_back(face);
-                cone_orbit_sizes[l].push_back(orbit_size);
-                ++orbit_dims[l];
-             }
-          }   
+
+            if (all_cones[l].find(face) == all_cones[l].end()) {
+               // if the face does not exist so far, we create its whole orbit
+               int orbit_size = 0;
+               for (int j = 0; j < n_syms; ++j) {
+                  Set<int> new_cone;
+                  for (const auto& k : face) {
+                     new_cone.insert(symmetry[k][j]);
+                  }
+                  if (all_cones[l].insert(new_cone).second) {
+                     ++orbit_size;
+                     ++dims[l];
+                  }
+               }
+               cone_orbits[l].push_back(face);
+               cone_orbit_sizes[l].push_back(orbit_size);
+               ++orbit_dims[l];
+            }
+         }
       }
    }
-   
+
    if (!dim_given) {
       f.take("COMBINATORIAL_DIM") << res_dim;
       f.take("MAXIMAL_CONES_REPS_DIMS") << max_cones_dims;
@@ -112,7 +117,7 @@ void all_cones_symmetry(perl::Object f, int dim)
    f.take("CONES_ORBIT_SIZES") << cone_orbit_sizes;
 }
 
-Function4perl(&all_cones_symmetry, "all_cones_symmetry(SymmetricFan; $=-1)");
+Function4perl(&all_cones_symmetry, "all_cones_symmetry(PolyhedralFan; $=-1)");
 
 } }
 

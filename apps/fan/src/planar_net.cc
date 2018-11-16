@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -44,6 +44,7 @@
 namespace polymake { namespace fan {
 
 namespace {
+   constexpr double epsilon = 1e-10;
 
    typedef std::pair<int,int> directed_edge;
    typedef std::pair<int,int> vertex_facet_pair;
@@ -94,36 +95,42 @@ namespace {
 
    // we try to compute exactly as long as we can
    template <typename Coord>
-   inline double dist(const Vector<Coord>& x, const Vector<Coord>& y) {
+   double dist(const Vector<Coord>& x, const Vector<Coord>& y)
+   {
       return sqrt(convert_to<double>(sqr(x-y)));
    }
 
-   inline
-   double norm(const Vector<double>& v) {
-      return sqrt(pm::operators::sqr(v));
+   double norm(const Vector<double>& v)
+   {
+      return sqrt(sqr(v));
    }
 
    // counter clock-wise orientation of three affine points
-   inline
-   int ccw(const Vector<double>& a, const Vector<double>& b, const Vector<double>& c) {
+   int ccw(const Vector<double>& a, const Vector<double>& b, const Vector<double>& c)
+   {
       const double det_by_laplace=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+      if (fabs(det_by_laplace) < epsilon) {
+         return 0;
+      }
       return sign(det_by_laplace);
    }
 
-   inline
    bool proper_segment_intersection(const Vector<double>& a, const Vector<double>& b,
-                                    const Vector<double>& c, const Vector<double>& d) {
+                                    const Vector<double>& c, const Vector<double>& d)
+   {
       return (ccw(a,b,c) * ccw(a,b,d) < 0) && (ccw(c,d,a) * ccw(c,d,b) < 0);
    }
 
-   inline
+#if 0  // unused now
    bool point_in_facet(const Vector<double>& point, const int facet,
-                       const Array< Array<int> >& vif, const Matrix<double>& net_vertices, const Map<vertex_facet_pair,int>& vf_map) {
-
+                       const Array<Array<int>>& vif,
+                       const Matrix<double>& net_vertices,
+                       const Map<vertex_facet_pair,int>& vf_map)
+   {
 #if PLANAR_NET_DEBUG > 2
       cerr << " [point=" << point << " in facet " << facet<< ":";
 #endif
-      Entire< Array<int> >::const_iterator iv=entire(vif[facet]);
+      auto iv=entire(vif[facet]);
       const int first_vertex = vf_map[vertex_facet_pair(*iv,facet)];
       Vector<double> pvh = net_vertices[first_vertex];
       Vector<double> nvh;
@@ -136,7 +143,7 @@ namespace {
          if (ccw(pvh,nvh,point)<0) {
             // the point is on the negative side of that edge, hence ...
 #if PLANAR_NET_DEBUG > 2
-            cerr << " *]";
+            cerr << " (" << pvh << ", " << nvh << ", " << point << ")*]";
 #endif
             
             return false;
@@ -147,7 +154,7 @@ namespace {
       nvh = net_vertices[first_vertex];
       if (ccw(pvh,nvh,point)<0) {
 #if PLANAR_NET_DEBUG > 2
-         cerr << " *]";
+         cerr << "final (" << pvh << ", " << nvh << ", " << point << ")*]";
 #endif
          return false;
       }
@@ -156,17 +163,18 @@ namespace {
 #endif
       return true;
    }
+#endif
 
-   inline
    bool point_versus_edges_of_facet(const Vector<double>& point, const Vector<double>& previous_point, const int facet,
-                                    const Array< Array<int> >& vif, const Matrix<double>& net_vertices, const Map<vertex_facet_pair,int>& vf_map) {
+                                    const Array< Array<int> >& vif, const Matrix<double>& net_vertices, const Map<vertex_facet_pair,int>& vf_map)
+   {
   
 #if PLANAR_NET_DEBUG > 2
       cerr << " [point=" << point << " versus edges of facet " << facet<< ":";
 #endif
       Vector<double> pvh = net_vertices[vf_map[vertex_facet_pair(vif[facet].back(),facet)]];
       Vector<double> nvh;
-      for (Entire< Array<int> >::const_iterator iv=entire(vif[facet]); !iv.at_end(); ++iv) {
+      for (auto iv=entire(vif[facet]); !iv.at_end(); ++iv) {
 #if PLANAR_NET_DEBUG > 2
          cerr << " " << *iv;
 #endif
@@ -187,9 +195,10 @@ namespace {
    
    template <typename Coord>
    int overlap(const Vector<double>& point, const Vector<double>& previous_point,
-               const Array< Array<int> >& vif, const Set<int>& marked, const Matrix<double>& net_vertices, const Map<vertex_facet_pair,int>& vf_map) {
+               const Array< Array<int> >& vif, const Set<int>& marked, const Matrix<double>& net_vertices, const Map<vertex_facet_pair,int>& vf_map)
+   {
       /* Check each facet h in the layout so far. */
-      for (Entire< Set<int> >::const_iterator h=entire(marked); !h.at_end(); ++h) {
+      for (auto h=entire(marked); !h.at_end(); ++h) {
          /* There are two types of overlaps:
             (1) The point to be placed could be contained in the facet h ... */
          /* this would also trigger an edge-intersection except for some corner-cases which are ignored for now
@@ -224,8 +233,8 @@ namespace {
       FirstThreeOnFacet.push_back(ix); FirstThreeOnFacet.push_back(iy); FirstThreeOnFacet.push_back(iz);
 
       Vector<double> // dehomogenize and subtract
-         u = Vector<double>(V[ix].slice(1) - V[iy].slice(1)),
-         v = Vector<double>(V[iz].slice(1) - V[iy].slice(1));
+         u = Vector<double>((V[ix] - V[iy]).slice(range_from(1))),
+         v = Vector<double>((V[iz] - V[iy]).slice(range_from(1)));
       double
          len_u=norm(u), len_v=norm(v);
       
@@ -285,7 +294,7 @@ namespace {
 #if PLANAR_NET_DEBUG > 1
             cerr << " next_vertex=" << next_vertex << " interferes with facet " << h << endl;
             const Array<int>& vif_h=vif[h];
-            for (Entire< Array<int> >::const_iterator v=entire(vif_h); !v.at_end(); ++v)
+            for (auto v=entire(vif_h); !v.at_end(); ++v)
                cerr << " " << *v << "/" << vf_map[vertex_facet_pair(*v,h)] << ": " << net_vertices[vf_map[vertex_facet_pair(*v,h)]] << endl;
 #endif
             cv=initial_cv;
@@ -348,7 +357,7 @@ namespace {
 #if PLANAR_NET_DEBUG > 2
       cerr << "queue_neighbors: f=" << f;
 #endif
-      for (Entire< Set<int> >::const_iterator n_it = entire(neighbors); !n_it.at_end(); ++n_it)
+      for (auto n_it = entire(neighbors); !n_it.at_end(); ++n_it)
          if (!marked.contains(*n_it)) {
 #if PLANAR_NET_DEBUG > 2
             cerr << " " << *n_it;
@@ -505,7 +514,7 @@ perl::Object planar_net(perl::Object p)
    }
 
    tree_type flaps;
-   for (Entire< Edges< Graph<> > >::const_iterator e=entire(edges(DG));  !e.at_end();  ++e) {
+   for (auto e=entire(edges(DG));  !e.at_end();  ++e) {
       // flaps are directed from facet f to facet g, where f has the smaller index
       int f,g;
       if (e.from_node() < e.to_node()) {
@@ -540,7 +549,7 @@ perl::Object planar_net(perl::Object p)
       flaps.push_back(directed_edge(vf_map[vertex_facet_pair(ia,f)],vf_map[vertex_facet_pair(ib,f)]));
    }
 
-   perl::Object net(perl::ObjectType::construct<Coord>("PlanarNet"));
+   perl::Object net("PlanarNet", mlist<Coord>());
    net.set_description() << "planar net of " << p.name() << endl;
 
    net.take("VERTICES") << (ones_vector<double>(n_net_vertices) | net_vertices);

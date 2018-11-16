@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2016
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -29,7 +29,7 @@ declare object PropagatedPolytope<Scalar=Rational> : Polytope<Scalar> {
 property SUM_PRODUCT_GRAPH : Graph<Directed> {
 
    # The translation vectors of the arcs.
-   property TRANSLATIONS : EdgeMap<Directed, Vector<Scalar> > : construct(ADJACENCY);
+   property TRANSLATIONS : EdgeMap<Directed,Vector<Scalar>> : construct(ADJACENCY);
 
 }
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -21,29 +21,28 @@
 
 namespace pm { namespace perl {
 
-static glue::cached_cv
-   give_cv={ "Polymake::Core::Object::give", 0 },
-   give_nm_cv={ "Polymake::Core::Object::give_with_name", 0 },
-   take_cv={ "Polymake::Core::Object::take", 0 },
-   lookup_cv={ "Polymake::Core::Object::lookup_pv", 0 },
-   add_cv={ "Polymake::Core::Object::add", 0 },
-   remove_cv={ "Polymake::Core::Object::remove", 0 },
-   attach_cv={ "Polymake::Core::Object::attach", 0 },
-   remove_attachment_cv={ "Polymake::Core::Object::remove_attachment", 0 },
-   set_name_cv={ "Polymake::Core::Object::set_name", 0 },
-   set_changed_cv={ "Polymake::Core::Object::set_changed", 0 },
-   object_isa_cv={ "Polymake::Core::Object::isa", 0 },
-   object_type_isa_cv={ "Polymake::Core::ObjectType::isa", 0 },
-   commit_cv={ "Polymake::Core::Object::commit", 0 },
-   new_cv={ "Polymake::Core::Object::new_named", 0 },
-   construct_cv={ "Polymake::Core::Object::construct", 0 },
-   construct_with_size_cv={ "Polymake::Core::BigObjectArray::construct_with_size", 0 },
-   copy_cv={ "Polymake::Core::Object::copy", 0 },
-   cast_cv={ "Polymake::Core::Object::cast", 0 },
-   load_cv={ "Polymake::User::load", 0 },
-   save_cv={ "Polymake::User::save", 0 };
-
 namespace {
+
+glue::cached_cv give_cv{ "Polymake::Core::Object::give" },
+             give_nm_cv{ "Polymake::Core::Object::give_with_name" },
+                take_cv{ "Polymake::Core::Object::take" },
+              lookup_cv{ "Polymake::Core::Object::lookup_pv" },
+                 add_cv{ "Polymake::Core::Object::add" },
+              remove_cv{ "Polymake::Core::Object::remove" },
+              attach_cv{ "Polymake::Core::Object::attach" },
+  remove_attachment_cv={ "Polymake::Core::Object::remove_attachment" },
+            set_name_cv{ "Polymake::Core::Object::set_name" },
+         set_changed_cv{ "Polymake::Core::Object::set_changed" },
+          object_isa_cv{ "Polymake::Core::Object::isa" },
+     object_type_isa_cv{ "Polymake::Core::ObjectType::isa" },
+              commit_cv{ "Polymake::Core::Object::commit" },
+                 new_cv{ "Polymake::Core::Object::new_named" },
+           construct_cv{ "Polymake::Core::Object::construct" },
+ construct_with_size_cv{ "Polymake::Core::BigObjectArray::construct_with_size" },
+                copy_cv{ "Polymake::Core::Object::copy" },
+                cast_cv{ "Polymake::Core::Object::cast" },
+                load_cv{ "Polymake::User::load" },
+                save_cv{ "Polymake::User::save" };
 
 std::pair<SV*, SV*> get_Array_pkg_and_typeof_impl(pTHX)
 {
@@ -57,7 +56,6 @@ std::pair<SV*, SV*> get_Array_pkg_and_typeof_impl(pTHX)
    return { *svp, *typeof_gvp };
 }
 
-inline
 SV* get_Array_type(pTHX_ SV* el_type)
 {
    static std::pair<SV*, SV*> pkg_and_typeof=get_Array_pkg_and_typeof_impl(aTHX);
@@ -68,7 +66,6 @@ SV* get_Array_type(pTHX_ SV* el_type)
    return perl::glue::call_func_scalar(aTHX_ pkg_and_typeof.second, true);
 }
 
-inline
 void set_Array_type(SV* ar_ref, SV* el_type)
 {
    dTHX;
@@ -78,7 +75,6 @@ void set_Array_type(SV* ar_ref, SV* el_type)
    sv_bless(ar_ref, gv_stashsv(PmArray(array_type)[glue::PropertyType_pkg_index], TRUE));
 }
 
-inline
 void copy_ref(SV* &dst, SV* const src)
 {
    dTHX;
@@ -98,7 +94,6 @@ void copy_ref(SV* &dst, SV* const src)
    }
 }
 
-inline
 SV* init_copy_ref(SV* src)
 {
    if (src) {
@@ -108,14 +103,12 @@ SV* init_copy_ref(SV* src)
    return src;
 }
 
-inline
 bool has_init_transaction(SV* obj_ref)
 {
    SV* trans_sv=PmArray(obj_ref)[glue::Object_transaction_index];
    return SvROK(trans_sv) && SvSTASH(SvRV(trans_sv))==glue::Object_InitTransaction_stash;
 }
 
-inline
 void check_ref(SV* obj_ref)
 {
    if (__builtin_expect(obj_ref != nullptr, 1))
@@ -304,7 +297,7 @@ pm::Array<Object> Object::lookup_multi(const AnyString& name, all_selector) cons
    mPUSHp(name.ptr, name.len);
    mPUSHp("*", 1);
    PUTBACK;
-   return pm::Array<Object>(glue::call_method_scalar(aTHX_ "lookup"), value_allow_undef);
+   return pm::Array<Object>(glue::call_method_scalar(aTHX_ "lookup"), ValueFlags::allow_undef);
 }
 
 Object Object::give_multi(const AnyString& name, const OptionSet& props, property_type t) const
@@ -345,7 +338,7 @@ PropertyValue Object::get_attachment(const AnyString& name) const
    check_ref(obj_ref);
    dTHX;
    SV** const valp=hv_fetch((HV*)SvRV(PmArray(obj_ref)[glue::Object_attachments_index]), name.ptr, name.len, FALSE);
-   return PropertyValue(valp ? SvREFCNT_inc(PmArray(*valp)[0]) : &PL_sv_undef, value_allow_undef);
+   return PropertyValue(valp ? SvREFCNT_inc(PmArray(*valp)[0]) : &PL_sv_undef, ValueFlags::allow_undef);
 }
 
 bool Object::exists(const AnyString& name) const
@@ -406,13 +399,6 @@ void Object::remove(const Object& sub_obj)
    glue::call_func_void(aTHX_ remove_cv);
 }
 
-SV* ObjectType::construct_parameterized_type(const AnyString& type_name)
-{
-   dTHX;
-   // type arguments are already pushed on the stack
-   return glue::call_func_scalar(aTHX_ glue::fetch_typeof_gv(aTHX_ type_name.ptr, type_name.len), true);
-}
-
 bool ObjectType::isa(const ObjectType& other) const
 {
    check_ref(obj_ref);
@@ -454,14 +440,10 @@ bool ObjectType::isa(const AnyString& type_name) const
    return glue::call_func_bool(aTHX_ object_type_isa_cv, true);
 }
 
-ObjectType::ObjectType(const AnyString& type_name)
+AnyString ObjectType::TypeBuilder::app_method_name()
 {
-   dTHX;
-   PmStartFuncall(2);
-   SP=glue::push_current_application(aTHX_ SP);
-   mPUSHp(type_name.ptr, type_name.len);
-   PUTBACK;
-   obj_ref=glue::call_method_scalar(aTHX_ "eval_type_throw");
+   // must be aligned with Application.pm
+   return Str("construct_type");
 }
 
 bool Object::isa(const AnyString& type_name) const
@@ -579,7 +561,7 @@ Object Object::parent() const
 std::false_type* Value::retrieve(Object& x) const
 {
    dTHX;
-   if (!(options & value_not_trusted) ||
+   if (!(options * ValueFlags::not_trusted) ||
        __builtin_expect(SvROK(sv) && sv_derived_from(sv, "Polymake::Core::Object"), 1)) {
       copy_ref(x.obj_ref, sv);
    } else if (SvOK(sv)) {
@@ -593,7 +575,7 @@ std::false_type* Value::retrieve(Object& x) const
 std::false_type* Value::retrieve(ObjectType& x) const
 {
    dTHX;
-   if (!(options & value_not_trusted) ||
+   if (!(options * ValueFlags::not_trusted) ||
        __builtin_expect(SvROK(sv) && sv_derived_from(sv, "Polymake::Core::ObjectType"), 1)) {
       copy_ref(x.obj_ref, sv);
    } else if (SvOK(sv)) {
@@ -604,7 +586,7 @@ std::false_type* Value::retrieve(ObjectType& x) const
    return nullptr;
 }
 
-Value::NoAnchors Value::put_val(const ObjectType& x, int, int)
+Value::NoAnchors Value::put_val(const ObjectType& x, int)
 {
    check_ref(x.obj_ref);
    copy_ref(sv, x.obj_ref);
@@ -612,14 +594,14 @@ Value::NoAnchors Value::put_val(const ObjectType& x, int, int)
 }
 
 
-Value::NoAnchors Value::put_val(const Object& x, int, int)
+Value::NoAnchors Value::put_val(const Object& x, int)
 {
    check_ref(x.obj_ref);
    dTHX;
 
    // If the read_only flag is set, then this call is part of the preparation for parent_object.take();
    // in this case the child's transaction will be hung into the parent's one.
-   if ((options & (value_read_only | value_expect_lval)) != value_read_only &&
+   if ((options & (ValueFlags::read_only | ValueFlags::expect_lval)) != ValueFlags::read_only &&
        has_init_transaction(x.obj_ref)) {
       PmStartFuncall(1);
       PUSHs(x.obj_ref);
@@ -628,12 +610,12 @@ Value::NoAnchors Value::put_val(const Object& x, int, int)
    }
    copy_ref(sv, x.obj_ref);
 
-   if ((options & (value_read_only | value_allow_non_persistent | value_allow_store_any_ref)) ==
-       (value_allow_non_persistent | value_allow_store_ref)) {
+   if ((options & (ValueFlags::read_only | ValueFlags::allow_non_persistent | ValueFlags::allow_store_any_ref)) ==
+       (ValueFlags::allow_non_persistent | ValueFlags::allow_store_ref)) {
       // returning a new Object thru the glueing layer
       SV* const name=PmArray(x.obj_ref)[glue::Object_name_index];
       if (!SvOK(name)) {
-         if (SV* const var_name=pm_perl_name_of_ret_var(aTHX))
+         if (SV* const var_name=glue::name_of_ret_var(aTHX))
             sv_setsv(name, var_name);
       }
    }
@@ -642,12 +624,12 @@ Value::NoAnchors Value::put_val(const Object& x, int, int)
 }
 
 
-Value::NoAnchors Value::put_val(const pm::Array<Object>& ar, int, int)
+Value::NoAnchors Value::put_val(const pm::Array<Object>& ar, int)
 {
    dTHX;
    // If the read_only flag is set, then this call is part of the preparation for parent_object.take();
    // in this case the children's transactions will be hung into the parent's one.
-   if ((options & (value_read_only | value_expect_lval)) == value_read_only) {
+   if ((options & (ValueFlags::read_only | ValueFlags::expect_lval)) == ValueFlags::read_only) {
       if (!ar.empty() && !ar.element_type().valid())
          throw std::runtime_error("can't create a property from an a big object array with incompatible element types");
    } else if (!SvREADONLY(SvRV(ar.get()))) {

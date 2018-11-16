@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -60,7 +60,7 @@ UserFunctionTemplate4perl("# @category Transformations"
                           "# | 0 1 0"
                           "# | 0 0 1"
                           "# Check out the __revert__ function to learn how to undo the transformation."
-                          "# It might have been more comfortable to use the __translate__ function to achieve the above result.",
+                          "# It might be more comfortable to use the __translate__ function to achieve the same result.",
                           "transform<Scalar>(Polytope<type_upgrade<Scalar>> Matrix<type_upgrade<Scalar>>; $=1)");
 
 UserFunctionTemplate4perl("# @category Transformations"
@@ -70,7 +70,7 @@ UserFunctionTemplate4perl("# @category Transformations"
                           "# @param Bool store stores the reverse transformation as an attachment (REVERSE_TRANSFORMATION);"
                           "#   default value: 1."
                           "# @return Polytope"
-                          "# @example To sacle the square by 23, do this:"
+                          "# @example To scale the square by 23, do this:"
                           "# > $p = scale(cube(2),23);"
                           "# > print $p->VERTICES;"
                           "# | 1 -23 -23"

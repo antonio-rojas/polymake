@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -21,51 +21,43 @@
 
 namespace pm {
 
-template <typename Matrix> class Rows;
-template <typename Matrix> class Cols;
+template <typename TMatrix> class Rows;
+template <typename TMatrix> class Cols;
 
-template <typename Matrix>
-struct spec_object_traits< Rows<Matrix> >
+template <typename TMatrix>
+struct spec_object_traits< Rows<TMatrix> >
    : spec_object_traits<is_container> {
-   typedef Matrix masquerade_for;
-   static const bool is_lazy         = object_traits<Matrix>::is_lazy,
-                     is_always_const = object_traits<Matrix>::is_always_const;
-   static const int is_resizeable= object_traits<Matrix>::is_resizeable ? 1 : 0;
+   typedef TMatrix masquerade_for;
+   static const bool is_lazy         = object_traits<TMatrix>::is_lazy,
+                     is_always_const = object_traits<TMatrix>::is_always_const;
+   static const int is_resizeable= object_traits<TMatrix>::is_resizeable ? 1 : 0;
    static const IO_separator_kind IO_separator=IO_sep_enforce;
 };
-template <typename Matrix>
-struct spec_object_traits< Cols<Matrix> >
-   : spec_object_traits< Rows<Matrix> > {};
+template <typename TMatrix>
+struct spec_object_traits< Cols<TMatrix> >
+   : spec_object_traits< Rows<TMatrix> > {};
 
-template <typename Matrix>
-class Rows< Wary<Matrix> > : public Rows<Matrix> {};
-
-template <typename Matrix>
-class Cols< Wary<Matrix> > : public Cols<Matrix> {};
-
-template <typename Matrix> inline
-Rows<typename Concrete<Matrix>::type>& rows(Matrix& m)
+template <typename TMatrix>
+auto rows(TMatrix&& m)
+   // gcc 5 needs this crutch
+   -> typename inherit_ref_norv<Rows<unwary_t<pure_type_t<TMatrix>>>, TMatrix&>::type
 {
-   return reinterpret_cast<Rows<typename Concrete<Matrix>::type>&>(concrete(m));
+   return reinterpret_cast<typename inherit_ref_norv<Rows<unwary_t<pure_type_t<TMatrix>>>, TMatrix&>::type>(unwary(m));
 }
 
-template <typename Matrix> inline
-const Rows<typename Concrete<Matrix>::type>& rows(const Matrix& m)
+template <typename TMatrix>
+auto cols(TMatrix&& m)
+   // gcc 5 needs this crutch
+   -> typename inherit_ref_norv<Cols<unwary_t<pure_type_t<TMatrix>>>, TMatrix&>::type
 {
-   return reinterpret_cast<const Rows<typename Concrete<Matrix>::type>&>(concrete(m));
+   return reinterpret_cast<typename inherit_ref_norv<Cols<unwary_t<pure_type_t<TMatrix>>>, TMatrix&>::type>(unwary(m));
 }
 
-template <typename Matrix> inline
-Cols<typename Concrete<Matrix>::type>& cols(Matrix& m)
-{
-   return reinterpret_cast<Cols<typename Concrete<Matrix>::type>&>(concrete(m));
-}
+template <typename TMatrix>
+class Rows<Wary<TMatrix>> : public Rows<TMatrix> { };
 
-template <typename Matrix> inline
-const Cols<typename Concrete<Matrix>::type>& cols(const Matrix& m)
-{
-   return reinterpret_cast<const Cols<typename Concrete<Matrix>::type>&>(concrete(m));
-}
+template <typename TMatrix>
+class Cols<Wary<TMatrix>> : public Cols<TMatrix> { };
 
 } // end namespace pm
 

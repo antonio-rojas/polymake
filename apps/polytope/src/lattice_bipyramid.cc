@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -21,6 +21,7 @@
 #include "polymake/Set.h"
 #include "polymake/PowerSet.h"
 #include "polymake/IncidenceMatrix.h"
+#include "polymake/common/labels.h"
 
 namespace polymake { namespace polytope {
 
@@ -58,11 +59,9 @@ perl::Object lattice_bipyramid_vv(perl::Object p_in, const Vector<Rational>& v, 
    p_out.take("VERTICES") << V_out;
 
    if (relabel) {
-      std::vector<std::string> labels(n_vertices);
-      read_labels(p_in, "VERTEX_LABELS", labels);
-      labels.resize(n_vertices+2);
-      labels[n_vertices]="Apex";
-      labels[n_vertices+1]="Apex'";
+      std::vector<std::string> labels = common::read_labels(p_in, "VERTEX_LABELS", n_vertices);
+      labels.emplace_back("Apex");
+      labels.emplace_back("Apex'");
       p_out.take("VERTEX_LABELS") << labels;
    }
    return p_out;
@@ -85,7 +84,6 @@ perl::Object lattice_bipyramid_innerpoint(perl::Object p_in, const Rational& z, 
 
 perl::Object lattice_bipyramid(perl::Object p_in, const Rational& z, const Rational& z_prime, perl::OptionSet options)
 {
-
    const bool pointed=p_in.give("POINTED");
    if (!pointed)
       throw std::runtime_error("lattice_bipyramid: input polyhedron not pointed");
@@ -93,27 +91,17 @@ perl::Object lattice_bipyramid(perl::Object p_in, const Rational& z, const Ratio
     const int n_vert = p_in.give("N_VERTICES");
     const int dim = p_in.call_method("DIM");
     if (n_vert > dim+1) {
-        const Matrix<Rational> F = p_in.give("FACETS");
-        const Matrix<Rational> V = p_in.give("VERTICES");
-        const Vector<Rational> zeros(2);
-        Matrix<Rational> vert;
-        Matrix<Rational> val;
-        for (Entire< Subsets_of_k<const sequence&> >::const_iterator v=entire(all_subsets_of_k(sequence(0,V.rows()),2)); !v.at_end(); ++v) {
-            vert = V.minor(*v,All);
-            val = F * T(vert);
-            for (Entire< Rows< Matrix<Rational> > >::const_iterator row=entire(rows(val)); !row.at_end(); ++row) {
-                if (*row == zeros) {
-                    goto endloop;
-                }
-            }
-            return lattice_bipyramid_vv(p_in, vert.row(0), vert.row(1), z, z_prime, options);
-            endloop:;
+       const Matrix<Rational> V = p_in.give("VERTICES");
+       const IncidenceMatrix<> VIF = p_in.give("VERTICES_IN_FACETS");
+       for (auto v_pair=entire(all_subsets_of_k(sequence(0, V.rows()), 2)); !v_pair.at_end(); ++v_pair) {
+           const int v0 = (*v_pair)[0];
+           const int v1 = (*v_pair)[1];
+           if ((VIF.col(v0) * VIF.col(v1)).empty()) {
+              return lattice_bipyramid_vv(p_in, V.row(v0), V.row(v1), z, z_prime, options);
+           }
         }
-        //throw std::runtime_error("lattice_bipyramid: could not find two vertices !!!");
-        return lattice_bipyramid_innerpoint(p_in,z,z_prime,options);
-    } else {
-        return lattice_bipyramid_innerpoint(p_in,z,z_prime,options);
     }
+    return lattice_bipyramid_innerpoint(p_in,z,z_prime,options);
 }
 
 UserFunction4perl("# @category Producing a polytope from polytopes"

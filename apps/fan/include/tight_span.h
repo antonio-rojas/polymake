@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -17,62 +17,33 @@
 #ifndef POLYMAKE_TIGHT_SPAN_H
 #define POLYMAKE_TIGHT_SPAN_H
 
-#include "polymake/client.h"
 #include "polymake/Matrix.h"
 #include "polymake/Vector.h"
 #include "polymake/linalg.h"
 
-#include "polymake/Array.h"
 #include "polymake/Set.h"
-#include "polymake/fan/face_lattice_tools.h"
-#include "polymake/fan/hasse_diagram.h"
-#include "polymake/FacetList.h"
 #include "polymake/list"
+#include "polymake/graph/Decoration.h"
 
 namespace polymake { namespace fan {
 
-   template <typename MatrixTop>
-      IncidenceMatrix<>
-      tight_span_from_incidence_with_excluded_faces(const GenericIncidenceMatrix<MatrixTop>& VIF, const Set< Set<int> > &excluded_faces, const int upper_bound)
-      {
-         //special cases
-         if(VIF.rows() == 0)
-            return IncidenceMatrix<>(0,0);
-         if(VIF.rows() == 1)
-            return IncidenceMatrix<>({{0}});
+   //Excludes all faces contained in a list of "boundary faces"
+   class NoBoundaryCut {
+      protected:
+         const std::list<Set<int> >& max_boundary_faces;
+         const IncidenceMatrix<>& maximal_cones;
+      public:
+         NoBoundaryCut(const std::list<Set<int> >& mbf, const IncidenceMatrix<>& mc) :
+            max_boundary_faces(mbf), maximal_cones(mc) {}
 
-         // compute the tight span
-         graph::HasseDiagram HD;
-         face_lattice::compute_tight_span(T(VIF), excluded_faces, filler(HD,true), upper_bound);
-         IncidenceMatrix<> TS(HD.max_faces(), VIF.rows());
-         TS.squeeze_cols();
-         return TS;
-      }
-
-   template <typename MatrixTop>
-      IncidenceMatrix<>
-      tight_span_from_incidence(const GenericIncidenceMatrix<MatrixTop>& VIF, const Array<IncidenceMatrix<> > &ListOfCones, const Array<int> dims, const int dim, const int upper_bound)
-      {
-         //special cases
-         if(VIF.rows() == 0)
-            return IncidenceMatrix<>(0,0);
-         if(VIF.rows() == 1)
-            return IncidenceMatrix<>({{0}});
-
-         Set<Set<int> > excluded_faces;
-         // compute the rigides (in HDpart on hight 0) of the HasseDiagram and determine the excluded faces
-         graph::HasseDiagram HDpart = hasse_diagram_fan_computation(VIF, ListOfCones, dims, dim, dim-1);
-         for(auto it=entire(HDpart.node_range_of_dim(0)); !it.at_end(); ++it)
-            if(HDpart.out_adjacent_nodes(*it).size() < 2)
-               excluded_faces+=HDpart.face(*it);
-
-         // compute the tight span
-         graph::HasseDiagram HD;
-         face_lattice::compute_tight_span(T(VIF), excluded_faces, filler(HD,true), upper_bound);
-         IncidenceMatrix<> TS(HD.max_faces(), VIF.rows());
-         TS.squeeze_cols();
-         return TS;
-      }
+         inline bool operator()(const graph::lattice::BasicDecoration& data) const {
+            if(data.face.size() == 0) return true;
+            auto face = accumulate(rows(maximal_cones.minor(data.face,All)), operations::mul());
+            for(auto mf_it : max_boundary_faces)
+               if(incl(face, mf_it) < 1) return false;
+            return true;
+         }
+   };
 
    template <typename Scalar, typename MTop, typename VTop, typename MatrixTop>
       Matrix<Scalar> tight_span_vertices( const GenericMatrix<MTop, Scalar>& points, const GenericIncidenceMatrix<MatrixTop>& VIF, const GenericVector<VTop, Scalar>& lift )

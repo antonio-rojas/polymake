@@ -1,0 +1,166 @@
+#  Copyright (c) 1997-2018
+#  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
+#  http://www.polymake.org
+#
+#  This program is free software; you can redistribute it and/or modify it
+#  under the terms of the GNU General Public License as published by the
+#  Free Software Foundation; either version 2, or (at your option) any
+#  later version: http://www.gnu.org/licenses/gpl.txt.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#-------------------------------------------------------------------------------
+#
+#  This file is part of the polymake database interface polyDB.
+#
+#   @author Silke Horn, Andreas Paffenholz
+#   http://solros.de
+#   http://www.mathematik.tu-darmstadt.de/~paffenholz
+#
+
+use namespaces qw(+ PolyDB);
+
+CREDIT polyDB
+
+# @category Database Write Access
+# Adds an object //obj// to the collection //col// in the database //db//.
+#
+# Note that you need write access to the database for this.
+#
+# @param Core::Object obj
+# @option String db                   name of the database
+# @option String collection           name of the collection
+# @option String id                   unique identifier, this is set to the name of the object, a different name should only be used in exceptional cases. This option is only valid if a single object is added.
+# @option String contributor          set the contributor
+# @option Bool local                  set to 1 if you want to use a local database (on localhost), default 0
+# @option String username
+# @option String password
+# @option Bool use_type_information   set to 1 to match properties with a template object
+# @option HASH type_information       object template specifying the properties to store
+# @option String type_information_key template name to load from the database
+# @option Bool nonew                  set to 1 if you don't want to compute missing properties but only delete surplus ones (only takes effect if use_type_info is also set to 1)
+# @option Bool keep_all_props         keep all properties present in the polymake object in the stored xml. Does not effect representation in the db. For this, provide a type information without a property mask
+# @option Bool noinsert               dont insert anything, just try evaluate the template
+# @option MongoClient client
+# @return String
+user_function db_insert ($, {db => $PolyDB::default::db_database_name, \
+                             collection => $PolyDB::default::db_collection_name, \
+                             local => 0, \
+                             id => undef, \
+                             contributor => undef, \
+                             username => $PolyDB::default::db_user, \
+                             password => $PolyDB::default::db_pwd, \
+                             client => undef, \
+                             use_type_information => 0, \
+                             type_information => undef, \
+                             type_information_key=> undef, \
+                             nonew => 0, \
+                             keep_all_props=> 0, \
+                             noxml=> 0, \
+                             noinsert => 0}) \
+{
+   my $obj;
+   my $is_array = 0;
+   if ( is_object($_[0]) ) {
+      if ( $_[0]->type->name eq "Array" ) {
+         $is_array = 1;
+      }
+      $obj = shift;
+   } else {
+      $obj = User::load(shift);
+   }
+   my ($options) = @_;
+   my ($db, $collection) = ($options->{db}, $options->{collection});
+
+   # get client if not given by the options
+   my $client = $options->{client} // Client::get_client($options);
+
+   my $collection_handler = Client::get_collection($client, $db, $collection);
+
+   # get type information if not given by the options
+   my $type_information;
+   my $output;
+   # check if use of type information is wanted
+   # check if type information is given in the options, otherwise try to load one
+   if ($options->{use_type_information} or defined($type_information = $options->{type_information}) or (defined($options->{'type_information_key'}) )) {
+      unless (defined($type_information)) {
+         # set key to default if type information should be used but no key is given
+         if ( !defined($options->{'type_information_key'}) ) {
+            $options->{'type_information_key'} = 'default.'.$collection;
+         }
+         my $ti_query = {db => $db, collection => $collection, local => $options->{local}, client => $client, type_information_key => $options->{type_information_key}};
+         $type_information = db_get_type_information($ti_query) or
+            die "Type information requested but not loaded\n";
+         $options->{type_information} = $type_information;
+      }
+   }
+
+   if ( $is_array ) {
+      my $count = 0;
+
+      die "option id cannot be used for addition of arrays\n" if defined($options->{"id"});
+
+      foreach my $object (@$obj) {
+         my $id = $object->name;
+
+         if ($collection_handler->find_one({'_id' => $id}) && !$options->{noinsert}) {
+            if ($options->{verbose}) { print "id $id already exists\n"; }
+            next;
+         }
+
+         my $output = DBInsert::insert_into_col($object, $collection_handler, $id, $options);
+
+         if (!$options->{noinsert} && !$output->acknowledged ) {
+            die "Error while inserting into database\n";
+         }
+         $count++;
+      }
+      print "Inserted $count objects.\n\n" if ($options->{verbose});
+   } else {
+      my $id = $options->{"id"} // $obj->name;
+      $output = DBInsert::insert_into_col($obj, $collection_handler, $id, $options);
+      if (!$options->{noinsert} && !$output->acknowledged ) {
+         die "Error while inserting into database\n";
+      }
+   }
+}
+
+# @category Database Write Access
+# Removes the object with a given //id// from the collection //col// in the database //db//.
+#
+# Note that you need write access to the database for this.
+#
+# @param String id
+# @option String db             name of the database
+# @option String collection     name of the collection
+# @option Bool local set to 1 if you want to use a local database (on localhost), default 0
+# @option String username
+# @option String password
+# @option MongoClient client
+# @return String
+user_function db_remove ($, {db => $PolyDB::default::db_database_name, \
+                             collection => $PolyDB::default::db_collection_name, \
+                             local => 0, \
+                             username => $PolyDB::default::db_user, \
+                             password => $PolyDB::default::db_pwd, \
+                             client => undef}) \
+{
+   my ($id, $options) = @_;
+   my ($db, $collection) = ($options->{db}, $options->{collection});
+
+   # get client if not given by the options
+   my $client = $options->{client} // Client::get_client($options);
+
+   my $col_obj = Client::get_collection($client, $db, $collection);
+
+   return $col_obj->delete_one({'_id' => $id});
+}
+
+
+# Local Variables:
+# mode: perl
+# cperl-indent-level:3
+# indent-tabs-mode:nil
+# End:

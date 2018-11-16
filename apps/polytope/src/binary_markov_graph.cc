@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -81,7 +81,7 @@ UserFunction4perl("# @category Producing a polytope from scratch"
                   "# @return PropagatedPolytope",
                   &binary_markov_graph, "binary_markov_graph(Array)");
 
-InsertEmbeddedRule("# @category Producing a polytope from scratch\n"
+InsertEmbeddedRule("# @category Producing a polytope from scratch"
                    "# @param String observation encoded as a string of \"0\" and \"1\".\n"
                    "user_function binary_markov_graph($) {\n"
                    "   binary_markov_graph(new Array<Bool>(is_string($_[0]) ? split //, $_[0] : $_[0]));\n"

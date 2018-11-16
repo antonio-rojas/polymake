@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -470,6 +470,11 @@ public:
    Rational& set(long num, long den)
    {
       set_data(num, den, initialized::yes);
+      return *this;
+   }
+   Rational& set(mpz_t&& num, mpz_t&& den)
+   {
+      set_data(num[0], den[0], initialized::yes);
       return *this;
    }
 
@@ -1665,7 +1670,7 @@ public:
       } else {
          throw GMP::ZeroDivide();
       }
-      if (a<0)
+      if (a<0 && k % 2)
          result.negate();
       return result;
    }
@@ -1982,7 +1987,7 @@ Integer trunc(const Rational& a)
 namespace operations {
 
 template <>
-struct cmp_scalar<Rational, Rational, true>
+struct cmp_scalar<Rational, Rational, void>
    : cmp_GMP_based<Rational> {};
 
 } // end namespace operations
@@ -1990,8 +1995,8 @@ struct cmp_scalar<Rational, Rational, true>
 template <bool is_numerator, typename TPart>
 struct object_traits<RationalParticle<is_numerator, TPart>>
    : object_traits<TPart> {
-   typedef TPart proxy_for;
-   static const bool is_temporary=true, is_persistent=false;
+   using proxy_for = TPart;
+   static constexpr bool is_temporary=true, is_persistent=false;
 };
 
 template <>
@@ -2081,6 +2086,10 @@ Integer& Integer::operator= (Rational&& b)
    set_data(*mpq_numref(&b), initialized::yes);
    return *this;
 }
+
+template <>
+Rational
+pow(const Rational& base, long exp);
 
 }
 namespace polymake {

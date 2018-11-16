@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -33,7 +33,7 @@ Rational volume(perl::Object p)
   GR = homogenization | GR;
   
   Rational volume(0);
-  for (Entire< Array< Set<int> > >::const_iterator f=entire(F); !f.at_end(); ++f) {
+  for (auto f=entire(F); !f.at_end(); ++f) {
     const Rational vol = abs(det( GR.minor(*f,All) ));
     if (vol == 0)
       cerr << "volume: WARNING simplex of volume 0." << endl;

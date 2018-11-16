@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -37,28 +37,16 @@ struct evaluate<OpRef,double>;
 
 }
 
-template <typename MinMax, typename Coefficient = Rational, typename Exponent = Rational>
-class PuiseuxFraction;
-
-template <typename MinMax, typename Coefficient, typename Exponent>
-struct matching_ring< PuiseuxFraction<MinMax, Coefficient, Exponent> > : std::true_type
-{
-   typedef Ring<Coefficient, Exponent> type;
-};
-
-
-
-template <typename MinMax, typename Coefficient, typename Exponent>
+template <typename MinMax, typename Coefficient=Rational, typename Exponent=Rational>
 class PuiseuxFraction {
 public:
-   typedef RationalFunction<Coefficient,Exponent> rf_type;
+   typedef RationalFunction<Coefficient, Exponent> rf_type;
 protected:
    rf_type rf;
 public:
    typedef typename rf_type::polynomial_type polynomial_type;
    typedef Exponent exponent_type;
    typedef Coefficient coefficient_type;
-   typedef typename rf_type::ring_type ring_type;
 
    template <typename> friend struct spec_object_traits;
    template <typename,bool,bool> friend struct choose_generic_object_traits;
@@ -81,23 +69,13 @@ public:
    /// Construct a zero value.
    PuiseuxFraction() : rf() {}
 
-   /// Construct a zero value of explicitely given ring type.
-   explicit PuiseuxFraction(const ring_type& r)
-      : rf(r) {}
-
    /// One argument which may be a coefficient-compatible type or a unipolynomial
    template <typename T,
              typename=typename std::enable_if<fits_as_particle<T>::value>::type>
    explicit PuiseuxFraction(const T& t)
       : rf(t) {}
 
-   /// One argument which may be a coefficient-compatible type or a unipolynomial and a ring
-   template <typename T,
-             typename=typename std::enable_if<fits_as_particle<T>::value>::type>
-   PuiseuxFraction(const T& t, const ring_type& r)
-      : rf(t) {}
-
-   PuiseuxFraction(const RationalFunction<Coefficient,Exponent>& t)
+   PuiseuxFraction(const rf_type& t)
       : rf(numerator(t),denominator(t)) {}
 
    /// Two arguments which may be coefficient-compatible type or unipolynomial
@@ -106,17 +84,11 @@ public:
    PuiseuxFraction(const T1& t1, const T2& t2)
       : rf(t1, t2) {}
 
-   /// Two arguments which may be coefficient-compatible type or unipolynomial and a ring
-   template <typename T1, typename T2,
-             typename=typename std::enable_if<fits_as_particle<T1>::value && fits_as_particle<T2>::value>::type>
-   PuiseuxFraction(const T1& t1, const T2& t2, const ring_type& r)
-      : rf(t1, t2, r) {}
-
    template <typename T,
              typename=typename std::enable_if<fits_as_particle<T>::value>::type>
    PuiseuxFraction& operator= (const T& t)
    {
-      this->rf = RationalFunction<Coefficient,Exponent>(t);
+      rf = rf_type(t);
       return *this;
    }
 
@@ -124,8 +96,6 @@ public:
    {
       return MinMax::orientation();
    }
-
-   const ring_type& get_ring() const { return rf.get_ring(); }
 
    friend
    const polynomial_type& numerator(const PuiseuxFraction& me) { return numerator(me.rf); }
@@ -457,27 +427,54 @@ public:
       return r.compare(l) <= 0;
    }
 
+   static
+   const Array<std::string>& get_var_names()
+   {
+      return rf_type::get_var_names();
+   }
+
+   static
+   void set_var_names(const Array<std::string>& names)
+   {
+      rf_type::set_var_names(names);
+   }
+
+   static
+   void reset_var_names()
+   {
+      rf_type::reset_var_names();
+   }
+
+   static
+   void swap_var_names(PolynomialVarNames& other_names)
+   {
+      rf_type::swap_var_names(other_names);
+   }
 
    template <typename Output> friend
    Output& operator<< (GenericOutput<Output>& out, const PuiseuxFraction& vrf)
    {
       out.top() << '(';
-      numerator(vrf).pretty_print(out,cmp_monomial_ordered<Exponent>(-1 * MinMax::orientation()));
+      numerator(vrf).print_ordered(out, -MinMax::orientation());
       out.top() << ')';
       if (!is_one(denominator(vrf))) {
          out.top() << "/(";
-         denominator(vrf).pretty_print(out,cmp_monomial_ordered<Exponent>(-1 * MinMax::orientation()));
+         denominator(vrf).print_ordered(out, -MinMax::orientation());
          out.top() << ')';
       }
       return out.top();
    }
 
-   RationalFunction<Coefficient, Exponent> to_rationalfunction() const {
+   rf_type to_rationalfunction() const
+   {
       return rf;
    }
 
    TropicalNumber<MinMax, Exponent> val() const
    {
+      if (is_zero(rf))
+         return TropicalNumber<MinMax, Exponent>::zero();
+      
       if (std::is_same<MinMax, Max>::value)
          return TropicalNumber<MinMax, Exponent>(numerator(rf).deg() - denominator(rf).deg());
       else
@@ -522,7 +519,7 @@ public:
    evaluate(const T& t, const long exp=1) const
    {
       Integer exp_lcm(exp);
-      exp_lcm = lcm(denominators(numerator(rf).monomials_as_vector() | denominator(rf).monomials_as_vector()));
+      exp_lcm = lcm(denominators(numerator(rf).monomials_as_vector() | denominator(rf).monomials_as_vector()) | exp_lcm);
       const double t_approx = std::pow(convert_to<double>(t),1.0/convert_to<double>(exp_lcm));
       Coefficient base = exp_lcm == exp ? t : t_approx;
 
@@ -544,7 +541,7 @@ public:
    evaluate(const GenericVector<VectorType, PuiseuxFraction>& vec, const T& t, const long exp=1)
    {
       Integer exp_lcm(exp);
-      for (typename Entire<VectorType>::const_iterator v = entire(vec.top()); !v.at_end(); ++v)
+      for (auto v = entire(vec.top()); !v.at_end(); ++v)
          exp_lcm = lcm(denominators(numerator(*v).monomials_as_vector() | denominator(*v).monomials_as_vector()) | exp_lcm);
 
       const double t_approx = std::pow(convert_to<double>(t),1.0/convert_to<double>(exp_lcm));
@@ -570,7 +567,7 @@ public:
    evaluate(const GenericMatrix<MatrixType, PuiseuxFraction>& m, const T& t, const long exp=1)
    {
       Integer exp_lcm(exp);
-      for (typename Entire<ConcatRows<MatrixType> >::const_iterator e = entire(concat_rows(m.top())); !e.at_end(); ++e)
+      for (auto e = entire(concat_rows(m.top())); !e.at_end(); ++e)
          exp_lcm = lcm(denominators(numerator(*e).monomials_as_vector() | denominator(*e).monomials_as_vector()) | exp_lcm);
 
       const double t_approx = std::pow(convert_to<double>(t),1.0/convert_to<double>(exp_lcm));
@@ -614,7 +611,7 @@ public:
              typename=typename std::enable_if<can_initialize<Coefficient, Scalar>::value>::type>
    explicit operator Scalar () const
    {
-      if (denominator(*this).unit() &&
+      if (denominator(*this).is_one() &&
           numerator(*this).deg() == 0 && numerator(*this).lower_deg() == 0)
          return static_cast<Scalar>(numerator(*this).lc());
 
@@ -625,6 +622,8 @@ public:
    {
       return val();
    }
+
+   size_t get_hash() const noexcept { return rf.get_hash(); }
 
 #if POLYMAKE_DEBUG
    void dump() const __attribute__((used)) { rf.dump(); }
@@ -688,7 +687,7 @@ struct spec_object_traits< Serialized< PuiseuxFraction<MinMax, Coefficient, Expo
 
    typedef PuiseuxFraction<MinMax, Coefficient, Exponent> masquerade_for;
 
-   typedef RationalFunction<Coefficient,Exponent> elements;
+   typedef RationalFunction<Coefficient, Exponent> elements;
 
    template <typename Me, typename Visitor>
    static void visit_elements(Me& me, Visitor& v)
@@ -732,6 +731,21 @@ struct choose_generic_object_traits< PuiseuxFraction<MinMax,Coefficient,Exponent
    }
 };
 
+template <typename MinMax, typename Coefficient, typename Exponent>
+struct hash_func<PuiseuxFraction<MinMax,Coefficient,Exponent>, is_scalar> {
+   size_t operator() (const PuiseuxFraction<MinMax,Coefficient,Exponent>& p) const noexcept
+   {
+      return p.get_hash();
+   }
+};
+
+namespace polynomial_impl {
+
+template <typename MinMax, typename Coefficient, typename Exponent>
+struct nesting_level< PuiseuxFraction<MinMax, Coefficient, Exponent> >
+  : int_constant<nesting_level<Coefficient>::value+1> {};
+
+}
 } // end namespace pm
 
 namespace polymake {

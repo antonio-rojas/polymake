@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -32,7 +32,7 @@ bool unimodular(perl::Object p)
 
    bool unimodular(true);
 
-   for (Entire< Array< Set<int> > >::const_iterator fi=entire(F); !fi.at_end(); ++fi) {
+   for (auto fi=entire(F); !fi.at_end(); ++fi) {
       if (abs( det(leading_col|C.minor(*fi,All)) ) != 1) {
          unimodular = false;
          break;
@@ -50,7 +50,7 @@ int n_unimodular(perl::Object p)
 
    int n_unimodular(0);
 
-   for (Entire< Array< Set<int> > >::const_iterator fi=entire(F); !fi.at_end(); ++fi) {
+   for (auto fi=entire(F); !fi.at_end(); ++fi) {
       if (abs( det(leading_col|C.minor(*fi,All)) ) == 1) {
          ++n_unimodular;
       }

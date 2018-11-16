@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -26,7 +26,8 @@
 #include "polymake/Array.h"
 #include "polymake/Map.h"
 #include "polymake/PowerSet.h"
-#include "polymake/graph/HasseDiagram.h"
+#include "polymake/graph/ShrinkingLattice.h"
+#include "polymake/graph/Decoration.h"
 #include "polymake/vector"
 #include <cassert>
 #include <deque>
@@ -34,9 +35,6 @@
 namespace polymake { namespace topaz {
 
 typedef EdgeMap<Directed, int> HasseEdgeMap;
-typedef Graph<Directed>::in_edge_list::const_iterator HasseDiagramInConstIterator;
-typedef Graph<Directed>::out_edge_list::const_iterator HasseDiagramOutConstIterator;
-
 
 
 //-------------------------------------------------------------------------------------------------------------
@@ -70,7 +68,7 @@ typedef Graph<Directed>::out_edge_list::const_iterator HasseDiagramOutConstItera
  */
 //bool checkAcyclicDFS(const HasseDiagram<Set<int>,bool>& M, Array<int>& marked, int v, bool lower, int base)
 template <class EdgeMap>
-bool checkAcyclicDFS(const graph::HasseDiagram& M, const EdgeMap& EM, Array<int>& marked, int v, bool lower, int base)
+bool checkAcyclicDFS(const graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, const EdgeMap& EM, Array<int>& marked, int v, bool lower, int base)
 {
    // mark node v as touched
    marked[v] = base;
@@ -79,7 +77,7 @@ bool checkAcyclicDFS(const graph::HasseDiagram& M, const EdgeMap& EM, Array<int>
    if (lower)
    {
       // check all out-edges (pointing up in the Hasse diagram)
-      for (HasseDiagramOutConstIterator e = M.out_edges(v).begin(); !e.at_end(); ++e)
+      for (auto e = M.out_edges(v).begin(); !e.at_end(); ++e)
       {
          // if the arc is in the arc set, i.e. reversed (pointing down)
          if (EM(e.from_node(), e.to_node()))
@@ -103,7 +101,7 @@ bool checkAcyclicDFS(const graph::HasseDiagram& M, const EdgeMap& EM, Array<int>
    else // otherwise we are on the upper size of a level
    {
       // check all in-edges (pointing down in the Hasse diagram)
-      for (HasseDiagramInConstIterator e = M.in_edges(v).begin(); !e.at_end(); ++e)
+      for (auto e = M.in_edges(v).begin(); !e.at_end(); ++e)
       {
          if (! EM(e.from_node(), e.to_node()) )
          {
@@ -141,26 +139,22 @@ bool checkAcyclicDFS(const graph::HasseDiagram& M, const EdgeMap& EM, Array<int>
  * @warning @a base is changed!
  */
 template <class EdgeMap>
-bool checkAcyclic(const graph::HasseDiagram& M, const EdgeMap& EM,  Array<int>& marked, int& base)
+bool checkAcyclic(const graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, const EdgeMap& EM,  Array<int>& marked, int& base)
 {
-   int d = M.dim() - 1;      // do not count empty face and top face
+   int d = M.rank() - 2;      // do not count empty face and top face
 
    // check each level in turn
-   for (int k = 0; k < d; ++k)
-   {
+   for (int k = 0; k < d; ++k) {
       // increase base
       base += 2;
 
       // check each face of dim k
-      for (Entire<graph::HasseDiagram::nodes_of_dim_set>::const_iterator f = entire(M.nodes_of_dim(k)); !f.at_end(); ++f)
-      {
-         int v = *f;
+      for (const auto v : M.nodes_of_rank(k+1)) {
          assert( v > 0 && v <= (M.nodes()-2) );
 
          // for each unmarked face
-         if ( marked[v] < base )
-         {
-            bool acyclic = checkAcyclicDFS(M, EM, marked, v, true, base);
+         if (marked[v] < base) {
+            const bool acyclic = checkAcyclicDFS(M, EM, marked, v, true, base);
             if (! acyclic)
                return false;
          }
@@ -182,18 +176,15 @@ bool checkAcyclic(const graph::HasseDiagram& M, const EdgeMap& EM,  Array<int>& 
  * We assume that @c marked has been initialized some time ago.
  */
 template <class EdgeMap>
-bool checkAcyclic(const graph::HasseDiagram& M, const EdgeMap& EM, int k, Array<int>& marked, int base)
+bool checkAcyclic(const graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, const EdgeMap& EM, int k, Array<int>& marked, int base)
 {
    // check each face of dim k
-   for (Entire<graph::HasseDiagram::nodes_of_dim_set>::const_iterator f = entire(M.nodes_of_dim(k)); !f.at_end(); ++f)
-   {
-      int v = *f;
+   for (const auto v : M.nodes_of_rank(k+1)) {
       assert( v > 0 && v <= (M.nodes()-2) );
 
       // for each unmarked face
-      if ( marked[v] < base )
-      {
-         bool acyclic = checkAcyclicDFS(M, EM, marked, v, true, base);
+      if (marked[v] < base) {
+         const bool acyclic = checkAcyclicDFS(M, EM, marked, v, true, base);
          if (! acyclic)
             return false;
       }
@@ -208,9 +199,9 @@ bool checkAcyclic(const graph::HasseDiagram& M, const EdgeMap& EM, int k, Array<
  * @returns @c true if the solution is acyclic
  */
 template <class EdgeMap>
-bool checkAcyclic(const graph::HasseDiagram& M, const EdgeMap& EM)
+bool checkAcyclic(const graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, const EdgeMap& EM)
 {
-   int d = M.dim() - 1;      // do not count empty face
+   int d = M.rank() - 2;      // do not count empty face
    int n = M.nodes() - 2;    // and top face
 
    Array<int> marked(n+1);
@@ -220,20 +211,16 @@ bool checkAcyclic(const graph::HasseDiagram& M, const EdgeMap& EM)
 
    // for each level in turn
    int base = -1;
-   for (int k = 0; k < d; ++k)
-   {
+   for (int k = 0; k < d; ++k) {
       // increase base
       base += 2;
 
       // check each face of dim k
-      for (Entire<graph::HasseDiagram::nodes_of_dim_set>::const_iterator f = entire(M.nodes_of_dim(k)); !f.at_end(); ++f)
-      {
-         const int v = *f;
+      for (const auto v : M.nodes_of_rank(k+1)) {
          assert( (v > 0) && (v <= n) );
 
          // for each unmarked face
-         if ( marked[v] < base )
-         {
+         if (marked[v] < base) {
             if (!checkAcyclicDFS(M, EM, marked, v, true, base))
                return false;
          }
@@ -249,42 +236,42 @@ bool checkAcyclic(const graph::HasseDiagram& M, const EdgeMap& EM)
  * @returns @c true if the given arc set is a matching
  */
 template <class EdgeMap>
-bool checkMatching(const graph::HasseDiagram& M, const EdgeMap& EM)
+bool checkMatching(const graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, const EdgeMap& EM)
 {
 #if POLYMAKE_DEBUG
    const bool debug_print = perl::get_debug_level() > 1;
 #endif
 
-   const int d = M.dim() - 1;
+   const int d = M.rank() - 2;
 
    // for each level in turn
    for (int k = 0; k <= d; ++k) {
       // check each face of dim k
-      for (Entire<graph::HasseDiagram::nodes_of_dim_set>::const_iterator f = entire(M.nodes_of_dim(k)); !f.at_end(); ++f) {
+      for (const auto f : M.nodes_of_rank(k+1)) {
          int inc = 0;  // count incident arcs
-         if ( k > 0 ) {
-            for (HasseDiagramInConstIterator e = M.in_edges(*f).begin(); !e.at_end(); ++e) {
+         if (k > 0) {
+            for (auto e = M.in_edges(f).begin(); !e.at_end(); ++e) {
                // if arc is in collection, i.e. reverse we have an incident arc
                if ( EM(e.from_node(), e.to_node()) )
                   ++inc;
                // if a node has more than two incident arcs the matching property is violated
                if (inc >= 2) {
 #if POLYMAKE_DEBUG
-                  if (debug_print) cout << "Matching propery violated for node " << *f << "=" << M.face(*f) << endl;
+                  if (debug_print) cout << "Matching propery violated for node " << f << "=" << M.face(f) << endl;
 #endif
                   return false;
                }
             }
          }
-         if ( k < d ) {
-            for (HasseDiagramOutConstIterator e = M.out_edges(*f).begin(); !e.at_end(); ++e) {
+         if (k < d) {
+            for (auto e = M.out_edges(f).begin(); !e.at_end(); ++e) {
                // if arc is in collection, i.e. reverse we have an incident arc
-               if ( EM(e.from_node(), e.to_node()) )
+               if (EM(e.from_node(), e.to_node()))
                   ++inc;
                // if a node has more than two incident arcs the matching property is violated
                if (inc >= 2) {
 #if POLYMAKE_DEBUG
-                  if (debug_print) cout << "Matching propery violated for node " << *f << "=" << M.face(*f) << endl;
+                  if (debug_print) cout << "Matching propery violated for node " << f << "=" << M.face(f) << endl;
 #endif
                   return false;
                }
@@ -313,9 +300,9 @@ bool checkMatching(const graph::HasseDiagram& M, const EdgeMap& EM)
  * On output an element (node) is set to true in the bitset if and only if the face is critical.
  */
 template<class EdgeMap>
-Bitset collectCriticalFaces(const graph::HasseDiagram& M, const EdgeMap& EM)
+Bitset collectCriticalFaces(const graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, const EdgeMap& EM)
 {
-   const int d = M.dim() - 1;      // do not count empty face
+   const int d = M.rank() - 2;      // do not count empty face
    const int n = M.nodes() - 2;    // and top face
 
    // ensure space
@@ -324,22 +311,22 @@ Bitset collectCriticalFaces(const graph::HasseDiagram& M, const EdgeMap& EM)
    // loop over all levels
    for (int k = 0; k <= d; ++k) {
       // pass through all faces of dimension k
-      for (Entire<graph::HasseDiagram::nodes_of_dim_set>::const_iterator f = entire(M.nodes_of_dim(k)); !f.at_end(); ++f) {
+      for (const auto f : M.nodes_of_rank(k+1)) {
          bool isCritical = true;
          // if the dimension is larger than 0, we can look at in-arcs
          if (k > 0) // pass through all in-arcs
-            for (HasseDiagramInConstIterator e = M.in_edges(*f).begin(); !e.at_end() && isCritical; ++e) 
+            for (auto e = M.in_edges(f).begin(); !e.at_end() && isCritical; ++e) 
                // if the arc is in the matching (i.e., reversed), f is not critical
                if (EM(e.from_node(), e.to_node())) 
                   isCritical = false;
          // if the dimension is smaller than d, we can look at out-arcs
-         if ( isCritical && k < d )  // pass through all out-arcs
-            for (HasseDiagramOutConstIterator e = M.out_edges(*f).begin(); !e.at_end() && isCritical; ++e) 
+         if (isCritical && k < d)  // pass through all out-arcs
+            for (auto e = M.out_edges(f).begin(); !e.at_end() && isCritical; ++e) 
                // if the arc is in the matching (i.e., reversed), f is not critical
                if (EM(e.from_node(), e.to_node()))  
                   isCritical = false;
-         if ( isCritical )
-            critical += *f;
+         if (isCritical)
+            critical += f;
       }
    }
    return critical;
@@ -356,9 +343,9 @@ Bitset collectCriticalFaces(const graph::HasseDiagram& M, const EdgeMap& EM)
  * @returns set containing critical faces
  */
 template <class EdgeMap>
-PowerSet<int> findCriticalFaces(const graph::HasseDiagram& M, const EdgeMap& EM)
+PowerSet<int> findCriticalFaces(const graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, const EdgeMap& EM)
 {
-   int d = M.dim() - 1;      // do not count empty face
+   int d = M.rank() - 2;      // do not count empty face
 
    // ensure space
    PowerSet<int> critical;
@@ -367,14 +354,13 @@ PowerSet<int> findCriticalFaces(const graph::HasseDiagram& M, const EdgeMap& EM)
    for (int k = 0; k <= d; ++k)
    {
       // pass through all faces of dimension k
-      for (Entire<graph::HasseDiagram::nodes_of_dim_set>::const_iterator f = entire(M.nodes_of_dim(k)); !f.at_end(); ++f)
-      {
+      for (const auto f : M.nodes_of_rank(k+1)) {
          bool isCritical = true;
          // if the dimension is larger than 0, we can look at in-arcs
          if (k > 0)
          {
             // pass through all in-arcs
-            for (HasseDiagramInConstIterator e = M.in_edges(*f).begin(); !e.at_end(); ++e)
+            for (auto e = M.in_edges(f).begin(); !e.at_end(); ++e)
             {
                // if the arc is in the matching (i.e., reversed), f is not critical
                if (EM(e.from_node(), e.to_node()))
@@ -385,21 +371,18 @@ PowerSet<int> findCriticalFaces(const graph::HasseDiagram& M, const EdgeMap& EM)
             }
          }
          // if the dimension is smaller than d, we can look at out-arcs
-         if ( isCritical && k < d )
-         {
+         if (isCritical && k < d) {
             // pass through all out-arcs
-            for (HasseDiagramOutConstIterator e = M.out_edges(*f).begin(); !e.at_end(); ++e)
-            {
+            for (auto e = M.out_edges(f).begin(); !e.at_end(); ++e) {
                // if the arc is in the matching (i.e., reversed), f is not critical
-               if (EM(e.from_node(), e.to_node()))
-               {
+               if (EM(e.from_node(), e.to_node())) {
                   isCritical = false;
                   break;
                }
             }
          }
-         if ( isCritical )
-            critical += M.face(*f);
+         if (isCritical)
+            critical += M.face(f);
       }
    }
    return critical;
@@ -417,7 +400,7 @@ template <class EdgeMap>
 int EdgeMapSize(const EdgeMap& EM)
 {
    int size = 0;
-   for (typename Entire<EdgeMap>::const_iterator e = entire(EM); !e.at_end(); ++e)
+   for (auto e = entire(EM); !e.at_end(); ++e)
       if (*e) ++size;
    return size;
 }
@@ -465,9 +448,9 @@ private:
  * Might be replaced by @c Array and precomputation of the size.
  */
 template <class vect>
-void orderEdgesLex(const graph::HasseDiagram& M, vect& order, int bottomLevel, int topLevel)
+void orderEdgesLex(const graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, vect& order, int bottomLevel, int topLevel)
 {
-   int d = M.dim() - 1;      // do not count empty face
+   int d = M.rank() - 2;      // do not count empty face
 
    order.clear();
 
@@ -476,25 +459,23 @@ void orderEdgesLex(const graph::HasseDiagram& M, vect& order, int bottomLevel, i
 
    int m = 0;
    for (int k = 0; k < d; ++k)
-      for (Entire<graph::HasseDiagram::nodes_of_dim_set>::const_iterator f = entire(M.nodes_of_dim(k)); !f.at_end(); ++f)
-         for (HasseDiagramOutConstIterator e = M.out_edges(*f).begin(); !e.at_end(); ++e)
+      for (const auto f : M.nodes_of_rank(k+1))
+         for (auto e = M.out_edges(f).begin(); !e.at_end(); ++e)
             E[std::make_pair(e.from_node(), e.to_node())] = m++;
 
    // loop over levels, starting from the top most
-   for (int k = topLevel; k >= bottomLevel; --k)
-   {
+   for (int k = topLevel; k >= bottomLevel; --k) {
       // collect all nodes of dimension k
       std::vector<Set<int> > FS;    // vertex sets of faces
       std::vector<int> FN;          // face numbers
       std::vector<int> index;       // indices to sort
-      const int n = M.node_range_of_dim(k).size();
-      FS.reserve(n); FN.reserve(n); index.reserve(n);
+      const int n_nodes = M.nodes_of_rank(k+1).size();
+      FS.reserve(n_nodes); FN.reserve(n_nodes); index.reserve(n_nodes);
       int i = 0;
-      for (Entire<graph::HasseDiagram::nodes_of_dim_set>::const_iterator f = entire(M.nodes_of_dim(k)); !f.at_end(); ++f)
-      {
-         const Set<int> F = M.face(*f);  // get vertex set corresponding to face
+      for (const auto f : M.nodes_of_rank(k+1)) {
+         const Set<int>& F = M.face(f);  // get vertex set corresponding to face
          FS.push_back(F);          // store set and
-         FN.push_back(*f);         // face number
+         FN.push_back(f);         // face number
          index.push_back(i++);
       }
 
@@ -512,10 +493,10 @@ void orderEdgesLex(const graph::HasseDiagram& M, vect& order, int bottomLevel, i
          std::vector<Set<int> > N;
          std::vector<int> EN;
          std::vector<int> index2;
-         const int n = M.in_edges(FN[*fit]).size();
-         N.reserve(n); EN.reserve(n); index2.reserve(n);
+         const int n_edges = M.in_edges(FN[*fit]).size();
+         N.reserve(n_edges); EN.reserve(n_edges); index2.reserve(n_edges);
          int l = 0;
-         for (HasseDiagramInConstIterator e = M.in_edges(FN[*fit]).begin(); !e.at_end(); ++e)
+         for (auto e = M.in_edges(FN[*fit]).begin(); !e.at_end(); ++e)
          {
             const Set<int> S = M.face(e.from_node());   // get vertex set corr. to neighbor
             N.push_back(S);                       // store it
@@ -552,11 +533,11 @@ void orderEdgesLex(const graph::HasseDiagram& M, vect& order, int bottomLevel, i
  * @a varLevel stores the level of @b all arcs.
  */
 template <class LevelMap, class Iterator>
-int greedyHeuristic(graph::HasseDiagram& M, HasseEdgeMap& EM, const LevelMap& varLevel, Iterator orderIt, Iterator orderEnd)
+int greedyHeuristic(graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, HasseEdgeMap& EM, const LevelMap& varLevel, Iterator orderIt, Iterator orderEnd)
 {
-   typedef Graph<Directed>::out_edge_list::const_iterator HasseDiagramOutConstIterator;
+   using HasseDiagramOutConstIterator = Graph<Directed>::out_edge_list::const_iterator ;
 
-   int d = M.dim() - 1;
+   int d = M.rank() - 2;
    int n = M.nodes() - 2;
    int size = 0;
    int m = varLevel.size();
@@ -566,20 +547,16 @@ int greedyHeuristic(graph::HasseDiagram& M, HasseEdgeMap& EM, const LevelMap& va
    Array<HasseDiagramOutConstIterator> V(m);
 
    // init solution to the empty set and collect edge iterators
-   int i = 0;
-   for (int k = 0; k < d; ++k)
-   {
-      for (Entire<graph::HasseDiagram::nodes_of_dim_set>::iterator f = entire(M.nodes_of_dim(k)); !f.at_end(); ++f)
-      {
-         for (HasseDiagramOutConstIterator e = M.out_edges(*f).begin(); !e.at_end(); ++e)
-         {
+   for (int i = 0, k = 0; k < d; ++k) {
+      for (const auto f : M.nodes_of_rank(k+1)) {
+         for (auto e = M.out_edges(f).begin(); !e.at_end(); ++e) {
             EM(e.from_node(), e.to_node()) = false;
             V[i] = e;
             ++i;
+            assert(i <= m);
          }
       }
    }
-   assert(i <= m);
 
    // init to no matched or marked faces
    for (int i = 0; i <= n; ++i)
@@ -601,7 +578,7 @@ int greedyHeuristic(graph::HasseDiagram& M, HasseEdgeMap& EM, const LevelMap& va
          // tentatively include var in solution and check ...
          EM(source, target) = true;
 
-         assert( M.dim_of_node(source) < M.dim_of_node(target) );
+         assert( M.rank(source) < M.rank(target) );
 
          if ( checkAcyclicDFS(M, EM, marked, source, true, base) )
          {
@@ -640,12 +617,12 @@ int greedyHeuristic(graph::HasseDiagram& M, HasseEdgeMap& EM, const LevelMap& va
  * This is a modified DFS, see processAlternatingPaths for a description.
  */
 template <class EdgeMap>
-void findAlternatingPathDFS(const graph::HasseDiagram& M, const EdgeMap& EM, Array<int>& marked, Array<int>& p, int v, bool lower)
+void findAlternatingPathDFS(const graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, const EdgeMap& EM, Array<int>& marked, Array<int>& p, int v, bool lower)
 {
    marked[v] = 1;
    if (lower)  // if we are one the lower side of a level
    {
-      for (HasseDiagramOutConstIterator e = M.out_edges(v).begin(); !e.at_end(); ++e)
+      for (auto e = M.out_edges(v).begin(); !e.at_end(); ++e)
       {
          if (EM(e.from_node(), e.to_node()))
          {
@@ -662,7 +639,7 @@ void findAlternatingPathDFS(const graph::HasseDiagram& M, const EdgeMap& EM, Arr
    }
    else
    {
-      for (HasseDiagramInConstIterator e = M.in_edges(v).begin(); ! e.at_end(); ++e)
+      for (auto e = M.in_edges(v).begin(); ! e.at_end(); ++e)
       {
          if (! EM(e.from_node(), e.to_node()) )
          {
@@ -690,7 +667,7 @@ void findAlternatingPathDFS(const graph::HasseDiagram& M, const EdgeMap& EM, Arr
  * @param size  size of the matching
  */
 template <class EdgeMap>
-void exchangePath(const graph::HasseDiagram& M, EdgeMap& EM, const Array<int>& p, int u, int v, int& size)
+void exchangePath(const graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, EdgeMap& EM, const Array<int>& p, int u, int v, int& size)
 {
    int w = v;   // start node
    do
@@ -768,7 +745,7 @@ void exchangePath(const graph::HasseDiagram& M, EdgeMap& EM, const Array<int>& p
  * Note that the result may depend on the order of the paths flipped.
  */
 template <class EdgeMap>
-void processAlternatingPaths(graph::HasseDiagram& M, EdgeMap& EM, int& size, int bottomLevel, int topLevel)
+void processAlternatingPaths(graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, EdgeMap& EM, int& size, int bottomLevel, int topLevel)
 {
 #if POLYMAKE_DEBUG
    const bool debug_print = perl::get_debug_level() > 1;
@@ -782,16 +759,11 @@ void processAlternatingPaths(graph::HasseDiagram& M, EdgeMap& EM, int& size, int
    // find alternating paths
    Array<int> marked(n+1);
    Array<int> dfsTree(n+1);
-   for (int k = bottomLevel; k < topLevel; ++k)
-   {
+   for (int k = bottomLevel; k < topLevel; ++k) {
       // check only nodes at the upper level
-      for (Entire<graph::HasseDiagram::nodes_of_dim_set>::const_iterator f = entire(M.nodes_of_dim(k+1)); !f.at_end(); ++f)
-      {
-         int u = *f;
-         if ( critical.contains(u) )
-         {
-            for (int i = 0; i <= n; ++i)
-            {
+      for (const auto u : M.nodes_of_rank(k+2)) {
+         if (critical.contains(u)) {
+            for (int i = 0; i <= n; ++i) {
                dfsTree[i] = -1;
                marked[i] = 0;
             }
@@ -799,17 +771,12 @@ void processAlternatingPaths(graph::HasseDiagram& M, EdgeMap& EM, int& size, int
             findAlternatingPathDFS(M, EM, marked, dfsTree, u, false);
 
             // check whether we found a path: lower part
-            for (Entire<graph::HasseDiagram::nodes_of_dim_set>::const_iterator f2 = entire(M.nodes_of_dim(k)); !f2.at_end(); ++f2)
-            {
-               int v = *f2;
-
-               //if ( (v != u) && critical.contains(v) && (marked[v] == 1) )
-               if ( critical.contains(v) && (marked[v] == 1) )
-               {
+            for (const auto v : M.nodes_of_rank(k+1)) {
+               // if ( (v != u) && critical.contains(v) && (marked[v] == 1) )
+               if (critical.contains(v) && (marked[v] == 1)) {
                   // check whether path contains only nodes visited once
                   int w = v;
-                  do
-                  {
+                  do {
                      w = dfsTree[w];
                      assert( w >= 0 );
                      if ( marked[w] != 1 )
@@ -817,8 +784,7 @@ void processAlternatingPaths(graph::HasseDiagram& M, EdgeMap& EM, int& size, int
                   }
                   while (w != u);
 
-                  if (w == u)
-                  {
+                  if (w == u) {
                      // exchange path
                      exchangePath(M, EM, dfsTree, u, v, size);
                      ++cnt;
@@ -1040,31 +1006,31 @@ void findMaximumForestMarked(const Graph& G, const EdgeMap& EM, MarkedMap& marke
 //-------------------------------------------------------------------------------------------------------------
 
 template <class Graph, class EdgeMap>
-void make_edges_in_Gamma(const graph::HasseDiagram& M, const HasseEdgeMap& EM, const Map<int,int>& FTON, Graph& Gamma, EdgeMap& edge_map_Gamma)
+void make_edges_in_Gamma(const graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, const HasseEdgeMap& EM, const Map<int,int>& FTON, Graph& Gamma, EdgeMap& edge_map_Gamma)
 {
-   for (Entire<graph::HasseDiagram::nodes_of_dim_set>::const_iterator f = entire(M.nodes_of_dim(1)); !f.at_end(); ++f) { // iterate over all 1-faces of the complex
+   for (const auto f : M.nodes_of_rank(2)) { // iterate over all 1-faces of the complex
       bool is_unmatched_edge (true);
-      for (HasseDiagramOutConstIterator e = M.out_edges(*f).begin(); !e.at_end() && is_unmatched_edge; ++e) { 
-         assert(M.dim_of_node(e.to_node()) == 2); // Assuming that out_edges go to the 2-skeleton
+      for (auto e = M.out_edges(f).begin(); !e.at_end() && is_unmatched_edge; ++e) { 
+         assert(M.rank(e.to_node()) == 3); // Assuming that out_edges go to the 2-skeleton
          if (EM(e.from_node(), e.to_node())) 
             is_unmatched_edge = false; // if a 1-face is matched to a 2-face, it doesn't count
       }
       if (is_unmatched_edge) {
-         const Set<int> e = M.in_adjacent_nodes(*f);
+         const auto& e = M.in_adjacent_nodes(f);
          assert(e.size()==2);
          const int v1 = e.front(), v2 = e.back();
 
          Gamma.edge(FTON[v1], FTON[v2]);
-         edge_map_Gamma(FTON[v1], FTON[v2]) = *f;
+         edge_map_Gamma(FTON[v1], FTON[v2]) = f;
       }
    }
 }
 
 template <class EdgeMap>
-void remove_matching_from_1_skeleton(const graph::HasseDiagram& M, EdgeMap& EM)
+void remove_matching_from_1_skeleton(const graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, EdgeMap& EM)
 {
-   for (Entire<sequence>::const_iterator n = entire(M.node_range_of_dim(0)); !n.at_end(); ++n)
-      for (HasseDiagramOutConstIterator e = M.out_edges(*n).begin(); !e.at_end(); ++e)
+   for (const auto n : M.nodes_of_rank(1))
+      for (auto e = M.out_edges(n).begin(); !e.at_end(); ++e)
          EM(e.from_node(), e.to_node()) = false;
 }
 
@@ -1087,7 +1053,7 @@ void remove_matching_from_1_skeleton(const graph::HasseDiagram& M, EdgeMap& EM)
  * is connected as well (see Joswig & Pfetsch [2005]).
  */
 template <class _EdgeMap>
-void completeToBottomLevel(graph::HasseDiagram& M, _EdgeMap& EM)
+void completeToBottomLevel(graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, _EdgeMap& EM)
 {
    // find critical faces of best_solution_
    Bitset critical = collectCriticalFaces(M, EM);
@@ -1096,7 +1062,7 @@ void completeToBottomLevel(graph::HasseDiagram& M, _EdgeMap& EM)
 
    if (debug_print) {
       cout << "critical faces: " << critical << endl;
-      for (Entire<Bitset>::const_iterator c = entire(critical); !c.at_end(); ++c)
+      for (auto c = entire(critical); !c.at_end(); ++c)
          cout << M.face(*c) << " ";
       cout << endl;
    }
@@ -1111,11 +1077,10 @@ void completeToBottomLevel(graph::HasseDiagram& M, _EdgeMap& EM)
    Map<int, int> FTON;
 
    // create nodes of the graph ( = vertices (0-faces) of complex )
-   for (Entire<graph::HasseDiagram::nodes_of_dim_set>::const_iterator f = entire(M.nodes_of_dim(0)); !f.at_end(); ++f)
-   {
+   for (const auto f : M.nodes_of_rank(1)) {
       const int v = Gamma.add_node();  // add 1-face
-      node_map_Gamma[v] = *f;
-      FTON[*f] = v;
+      node_map_Gamma[v] = f;
+      FTON[f] = v;
    }
 
    // create edges (arising from 1-faces in the complex)
@@ -1187,10 +1152,9 @@ void completeToBottomLevel(graph::HasseDiagram& M, _EdgeMap& EM)
  *
  */
 template <class _EdgeMap>
-void completeToTopLevel(const graph::HasseDiagram& M, _EdgeMap& EM)
+void completeToTopLevel(const graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, _EdgeMap& EM)
 {
-   typedef Entire<Graph<Directed>::out_edge_list>::const_iterator HasseDiagramOutConstIterator;
-   int d = M.dim() - 1;
+   int d = M.rank() - 2;
 
    // find critical faces of best_solution_
    Bitset critical = collectCriticalFaces(M, EM);
@@ -1207,28 +1171,23 @@ void completeToTopLevel(const graph::HasseDiagram& M, _EdgeMap& EM)
    std::vector<bool> loop;
 
    // create nodes of the graph ( = vertices (d-faces) of complex )
-   for (Entire<graph::HasseDiagram::nodes_of_dim_set>::const_iterator f = entire(M.nodes_of_dim(d)); !f.at_end(); ++f)
-   {
+   for (const auto f : M.nodes_of_rank(d+1)) {
       int v = G.add_node();  // add d-face
-      node_map_G[v] = *f;
-      FTON[*f] = v;
+      node_map_G[v] = f;
+      FTON[f] = v;
       loop.push_back(false);   // assume that node numbers a consecutive
    }
 
    // create edges (arising from 1-faces in the complex)
-   for (Entire<graph::HasseDiagram::nodes_of_dim_set>::const_iterator f = entire(M.nodes_of_dim(d-1)); !f.at_end(); ++f)
-   {
-      if ( critical.contains(*f) )
-      {
+   for (const auto f : M.nodes_of_rank(d)) {
+      if (critical.contains(f)) {
          // find the two nodes incident to the edge
          int v1 = -1;
          int v2 = -1;
-         for (HasseDiagramOutConstIterator e = M.out_edges(*f).begin(); !e.at_end(); ++e)
-         {
-            if (v1 == -1)
+         for (auto e = M.out_edges(f).begin(); !e.at_end(); ++e) {
+            if (v1 == -1) {
                v1 = e.to_node();
-            else
-            {
+            } else {
                assert( v2 == -1);
                v2 = e.to_node();
             }
@@ -1238,7 +1197,7 @@ void completeToTopLevel(const graph::HasseDiagram& M, _EdgeMap& EM)
          // either produce an edge or a loop:
          if (v2 != -1) {
             G.edge(FTON[v1], FTON[v2]);
-            edge_map_G(FTON[v1], FTON[v2]) = *f;
+            edge_map_G(FTON[v1], FTON[v2]) = f;
          } else
             loop[FTON[v1]] = true;   // store that the d-face corr. to a loop
       }
@@ -1266,10 +1225,10 @@ void completeToTopLevel(const graph::HasseDiagram& M, _EdgeMap& EM)
 }
 
 template <class EdgeMap>
-void print_reversed_edges(const graph::HasseDiagram& M, const EdgeMap& EM)
+void print_reversed_edges(const graph::ShrinkingLattice<graph::lattice::BasicDecoration>& M, const EdgeMap& EM)
 {
    cout << "critical Morse edges:\n";
-   for (Entire<Edges<Graph<Directed> > >::const_iterator e = entire(edges(M.graph())); !e.at_end(); ++e)
+   for (auto e = entire(edges(M.graph())); !e.at_end(); ++e)
       if (EM(e.from_node(), e.to_node()))
          cout << "(" << M.face(e.from_node()) << "," << M.face(e.to_node()) << ")";
    cout << endl;

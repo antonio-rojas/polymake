@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -76,9 +76,26 @@ public:
 
 // forward declarations needed for friend and specializations
 
-class Integer; class Rational; class AccurateFloat;
+class Integer; class Rational; class AccurateFloat; class Bitset;
 
 template <> struct spec_object_traits<Integer>;
+
+}
+
+namespace std {
+
+template <>
+class numeric_limits<pm::Integer>;
+
+template <>
+class numeric_limits<pm::Rational>;
+
+template <>
+class numeric_limits<pm::AccurateFloat>;
+
+}
+
+namespace pm {
 
 Integer gcd(const Integer& a, const Integer& b);
 Integer&& gcd(Integer&& a, const Integer& b);
@@ -1238,8 +1255,10 @@ public:
 
    /// Power.
    static
-   Integer pow(const Integer& a, unsigned long k)
+   Integer pow(const Integer& a, long k)
    {
+      if (__builtin_expect(k < 0, 0))
+         throw GMP::NaN();
       Integer result;
       if (__builtin_expect(isfinite(a), 1))
          mpz_pow_ui(&result, &a, k);
@@ -1251,8 +1270,10 @@ public:
    }
 
    static
-   Integer pow(long a, unsigned long k)
+   Integer pow(long a, long k)
    {
+      if (__builtin_expect(k < 0, 0))
+         throw GMP::NaN();
       Integer result;
       if (a>=0) {
          mpz_ui_pow_ui(&result, a, k);
@@ -1264,7 +1285,7 @@ public:
    }
 
    static
-   Integer pow(int a, unsigned long k)
+   Integer pow(int a, long k)
    {
       return pow(long(a), k);
    }
@@ -1485,6 +1506,7 @@ protected:
 
    friend class Rational;
    friend class AccurateFloat;
+   friend class Bitset;
    friend struct spec_object_traits<Integer>;
 };
 
@@ -1878,7 +1900,7 @@ struct cmp_GMP_based : cmp_extremal, cmp_partial_scalar {
 };
 
 template <>
-struct cmp_scalar<Integer, Integer, true>
+struct cmp_scalar<Integer, Integer, void>
    : cmp_GMP_based<Integer> {};
 
 } // end namespace operations
@@ -1928,6 +1950,10 @@ struct hash_func<Integer, is_scalar> : hash_func<MP_INT>
       return __builtin_expect(isfinite(a), 1) ? impl(a.get_rep()) : 0;
    }
 };
+
+template <>
+Integer
+pow(const Integer& base, long exp);
 
 }
 

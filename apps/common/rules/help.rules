@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -77,6 +77,8 @@ INCLUDE
 # Say ''print $application->name;'' to see its name.
 #
 # @param String name | Application app_obj
+# @example To set the graph application as current, type this:
+# > application "graph";
 
 
 # @topic core/functions/include
@@ -134,6 +136,26 @@ INCLUDE
 # @param any data object
 # @param String filename
 # @param String description
+
+
+# @topic core/functions/save_schema ($$)
+# @category Basic
+#
+# Generate a Relax-NG schema describing one or more `big' or `small' object types in the form as they
+# would appear when saved with commands [[save]] resp. [[save_data]].
+# @param any object ... an object whose type should be described, may be specified as a type expression as well.
+#        Multiple objects or type expressions may be passed as a list.
+#        Mixing `big' and `small' object types is not allowed.
+# @param String filename  a suffix .rng is appended automatically if no suffix is given
+#
+# @example [notest] create a schema for a Polytope<Rational> and save it in the file poly_rat.rng
+# > save_schema(typeof Polytope<Rational>, "poly_rat");
+# the same, specifying a type via a representative object
+# > $c=cube(3);
+# > save_schema($c, "poly_rat");
+#
+# @example [notest] create a schema for graphs and save it in the file graphs.rng
+# > save_schema(typeof props::Graph<Undirected>, typeof props::Graph<Directed>, "graph");
 
 
 # @topic core/functions/prefer
@@ -263,6 +285,15 @@ INCLUDE
 #
 # List all help topics matching the given pattern.
 # @param String pattern (part of) an item name to be looked for, may contain regular expression elements.
+# @example To get all help topics that include the word "simplicial", type this:
+# > apropos("simplicial");
+# | /objects/Visual::SimplicialComplexLattice
+# | /objects/Visual::SimplicialComplex
+# | /objects/GeometricSimplicialComplex
+# | /objects/SimplicialComplex
+# | /functions/Producing a new simplicial complex from others/simplicial_product
+# In order to view a help entry, you can use the help() funtion.
+# > help("/functions/Producing a new simplicial complex from others/simplicial_product");
 
 
 # @topic core/functions/history
@@ -325,7 +356,6 @@ INCLUDE
 # @category Interactive
 #
 # Create a directory tree for rules, scripts, clients, etc. in the given //extension// pertaining to the given application.
-# If the extension is managed by a VCS, the added subtree will be registered for check-in.
 # @param String extension : URI or top-level directory of a registered extension.
 # @param String app_name : name of the application to be extended; by default, the current application is assumed.
 
@@ -358,8 +388,8 @@ INCLUDE
 # To obtain the complete list of configuration options supported by the extension, you can pass a single option ''"--help"'',
 # examine its script configure.pl, or just make use of the TAB completion when typing this command.
 #
-# @param String path : top-level directory of the extension.
-# @param List options : options passed to the extension script configure.pl
+# @param String path top-level directory of the extension.
+# @param List options options passed to the extension script configure.pl
 
 
 # @topic core/functions/reconfigure_extension ($;@)
@@ -369,7 +399,7 @@ INCLUDE
 # if not, please use the command [[import_extension]], which supports passing configuration options too.
 #
 # @param String path : URI or top-level directory of the extension.
-# @param List options : options passed to the extension script configure.pl
+# @param List options options passed to the extension script configure.pl
 
 
 # @topic core/functions/obliterate_extension ($)
@@ -378,7 +408,7 @@ INCLUDE
 # Beware that in the //current// session all the rules and functions defined in the extension remain active!
 # Therefore it's strongly recommended to quit the current session right after executing this command.
 # The files comprising the extension itself are not deleted, however, so that you can re-import the extension later once you need it again.
-# @param String path : URI or top-level directory of the extension.
+# @param String path URI or top-level directory of the extension.
 
 
 # @topic core/functions/reconfigure ($)
@@ -386,17 +416,17 @@ INCLUDE
 # Repeats the auto-configuration routines stored in the given rulefile, possibly asking for program paths, options, etc.
 # If the configuration succeeds, and the rulefile hasn't been configured until now, it will be loaded, as well as all other known rulefiles
 # depending on it.
-# @param String rulename : name of the rulefile with optional prefix and suffix: "[APPNAME::]rulefile[@URI]".
-#                          APPNAME is to be specified when the rulefile does not belong to the current application;
-#                          URI specifies an extension the rulefile comes from.
+# @param String rulename name of the rulefile with optional prefix and suffix: "[APPNAME::]rulefile[@URI]".
+#                        APPNAME is to be specified when the rulefile does not belong to the current application;
+#                        URI specifies an extension the rulefile comes from.
 
 
 # @topic core/functions/unconfigure ($)
 # @category Interactive
 # Forgets the configuration made for the given rulefile and disables it for the //following// polymake sessions.
-# @param String rulename : name of the rulefile with optional prefix and suffix: "[APPNAME::]rulefile[@URI]".
-#                          APPNAME is to be specified when the rulefile does not belong to the current application;
-#                          URI specifies an extension the rulefile comes from.
+# @param String rulename name of the rulefile with optional prefix and suffix: "[APPNAME::]rulefile[@URI]".
+#                        APPNAME is to be specified when the rulefile does not belong to the current application;
+#                        URI specifies an extension the rulefile comes from.
 
 
 # @topic core/functions/show_unconfigured
@@ -408,15 +438,19 @@ INCLUDE
 # the required software and/or cleared out other configuration troubles.
 
 
-# @topic core/functions/export_configured ($;$)
+# @topic core/functions/export_configured ($;%)
 # @category Interactive
 # Saves all custom variables having non-defalt values in a file.
-# This includes all results of automatical or manual rule configuration.
+# This includes all results of automatic or manual rule configuration.
 # The obtained file can be edited manually, if needed, and used as a global configuration
 # source (see also [[wiki:howto/configure|How to configure polymake for a group of users]]).
-# @param String filename : where to store the settings
-# @param Bool merge_with_global if TRUE, the settings inherited from *your* global configuration
-#             will be included in the resulting file as well.
+# @param String filename where to store the settings
+# @option Bool merge_with_global if TRUE, the settings inherited from *your* global configuration
+#                                will be included in the resulting file as well.
+# @option Bool only_configured if TRUE, configuration status of unconfigured or only partially
+#                              configured rulefiles is not exported
+# @option String suppress regular expression matching fully qualified names of custom variables
+#                         that should not be exported
 
 
 # @topic core/functions/show_credits (;$)
@@ -562,6 +596,36 @@ INCLUDE
 #                        Several subobjects may be removed at once.
 
 
+# @topic core/objects/Core::Object/methods/attach (String,$;String)
+# Attach an arbitrary data item to a `big' object.
+# Attachments are saved in the same data file as the `big' object itself.
+# They can be retrieved by calling [[get_attachment]].
+# @param String name : attachment name, can be an arbitrary string.
+#                      If an attachment with the given name already exists,
+#                      it is silently replaced with new data.
+# @param Any data : attachment data, can be a simple numeric scalar, a string,
+#                   or a complex data type, e.g. a [[Matrix]] or [[Polynomial]].
+#                   `Big' objects, anonymous arrays or hashes are not allowed.
+# @param String constructor_args : optional list of property names of the owning `big' object
+#               which should be passed to the attached data constructor when it will be
+#               restored from a data file.  Properties of subobjects are specified
+#               in dotted path notation.  For example, for an attachment of type [[NodeMap]]
+#               you must specify the "ADJACENCY" property containing the graph
+#               the map is referring to.
+
+# @topic core/objects/Core::Object/methods/get_attachment (String)
+# Retrieve data stored in the given attachment.
+# @param String name : attachment name
+
+# @topic core/objects/Core::Object/methods/remove_attachment (String)
+# Remove the given attachment from the `big' object.
+# @param String name : attachment name
+# @return Any attachment data
+
+# @topic core/objects/Core::Object/methods/list_attachments ()
+# Return names of all attachments as a list of strings.
+
+
 # @topic core/objects/Core::RuleChain
 # A rule chain to compute properties of a `big' object.
 # It can be obtained by calling the method [[get_schedule]].
@@ -579,6 +643,39 @@ INCLUDE
 # @topic core/functions/exit
 # @category Interactive
 # use this command only if you want to restart polymake.
+
+
+# @topic core/install_mongodb
+# To install the perl-MongoDB module please either try via your package-manager:
+#   libmongodb-perl on ubuntu
+#
+# Or use the below guide to install it via cpan in a custom directory:
+#
+# Insert the following lines into your .bashrc (or .profile or ).
+# (Note that you should adapt the path in the first line to your needs.)
+#
+#   MYCPANSTUFF=/some/path/for/cpan/installation
+#   export PERL_LOCAL_LIB_ROOT="$PERL_LOCAL_LIB_ROOT:$MYCPANSTUFF";
+#   export PERL5LIB="$MYCPANSTUFF/lib/perl5:$PERL5LIB";
+#   export PATH="$MYCPANSTUFF/bin:$PATH";
+#
+# Now start a new shell and run
+#   env PERL_MB_OPT="--install_base $MYCPANSTUFF" \
+#     PERL_MM_OPT="INSTALL_BASE=$MYCPANSTUFF" \
+#     cpan
+#
+# Inside cpan (answer "yes" everywhere) and enter the following lines:
+#   o conf build_dir "/tmp/cpanstuff"
+#   o conf commit
+#   install Params::Validate
+#
+# Exit and restart cpan with the above command.
+#   install MongoDB
+#
+# (Installing Params::Validate separately first avoids some dependency problems.)
+
+
+
 
 # @topic core/polymake
 #       MM                            ,,

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -68,8 +68,9 @@ InsertEmbeddedRule("# @category Triangulations, subdivisions and volume"
                    "# @param Matrix points"
                    "# @option Bool max triggers the usage of the max-norm (exact computation)"
                    "# @option Bool l1 triggers the usage of the l1-norm (exact computation)"
-                   "# @return Matrix\n"
-                   "# @example > print points2metric(cube(2),max=>1);"
+                   "# @return Matrix"
+                   "# @example"
+                   "# > print points2metric(cube(2)->VERTICES, max=>1);"
                    "# | 0 2 2 2"
                    "# | 2 0 2 2"
                    "# | 2 2 0 2"
@@ -85,8 +86,9 @@ InsertEmbeddedRule("# @category Triangulations, subdivisions and volume"
                    "# If the option //max// or //l1// is set to true the max-norm or l1-norm is used instead (with exact computation)."
                    "# @param Polytope P"
                    "# @option Bool max triggers the usage of the max-norm (exact computation)"
-                   "# @return Matrix\n"
-                   "# @example > print points2metric(cube(2)->VERTICES,max=>1);"
+                   "# @return Matrix"
+                   "# @example"
+                   "# > print poly2metric(cube(2), max=>1);"
                    "# | 0 2 2 2"
                    "# | 2 0 2 2"
                    "# | 2 2 0 2"

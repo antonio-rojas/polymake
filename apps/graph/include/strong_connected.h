@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -73,7 +73,7 @@ protected:
          return discovery[n] >= 0;
       }
 
-      typedef IndexedSubset<const std::vector<int>&, sequence> component_type;
+      using component_type = IndexedSubset<const std::vector<int>&, const sequence>;
 
       component_type get_cur_component(int n) const
       {
@@ -118,7 +118,7 @@ public:
    typedef strong_components_iterator iterator;
    typedef strong_components_iterator const_iterator;
 
-   explicit strong_components_iterator(const TGraph& G)
+   explicit strong_components_iterator(const GenericGraph<TGraph>& G)
       : search_it(G)
       , nodes_it(entire(nodes(G)))
    {
@@ -179,7 +179,7 @@ template <typename TGraph> inline
 typename std::enable_if<TGraph::is_directed, IncidenceMatrix<>>::type
 strong_components(const GenericGraph<TGraph>& G)
 {
-   RestrictedIncidenceMatrix<only_cols> m(G.top().dim(), rowwise(), strong_components_iterator<TGraph>(G.top()));
+   RestrictedIncidenceMatrix<only_cols> m(G.top().dim(), rowwise(), strong_components_iterator<TGraph>(G));
    return IncidenceMatrix<>(std::move(m));
 }
 
@@ -188,7 +188,7 @@ template <typename TGraph> inline
 typename std::enable_if<TGraph::is_directed, bool>::type
 is_strongly_connected(const GenericGraph<TGraph>& G)
 {
-   strong_components_iterator<TGraph> c(G.top());
+   strong_components_iterator<TGraph> c(G);
    return c.at_end() || (*c).size()==G.top().nodes();
 }
 

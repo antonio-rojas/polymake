@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -15,6 +15,7 @@
 
 use strict;
 use namespaces;
+use warnings qw(FATAL void syntax misc);
 use feature 'state';
 
 package Polymake::Core::Application;
@@ -51,12 +52,11 @@ use Polymake::Struct (
    '@myINC',                      # [ directory with perl modules, optional preamble lines ]
    '@scriptpath',                 # directories with scripts
    '@object_types',               # ObjectType
-   [ '$default_type' => 'undef' ],
    '@rules',                      # Rule
    '@rules_to_finalize',          # Rule - production rules defined in the rulefiles being currently read
    '%rulefiles',                  # 'rule_key' => load status
    [ '$configured' => 'undef' ],  # 'rule_key' => configuration result
-   '$configured_at',              # last configuration timestamp (0 for core applications unless started with --reconfigure)
+   '$configured_at',              # last configuration timestamp (2 for core applications unless started with --reconfigure)
    '%rule_code',                  # 'rule_key' => CODE : the complete rulefile-level subroutine
    '%credits',                    # product name => Rule::Credit
    '%credits_by_rulefile',        # 'rule_key' => Rule::Credit
@@ -131,6 +131,10 @@ sub new {
       },
       1);
 
+   # for quick retrieval in C++ library
+   {  no strict 'refs';
+      readonly(${$self->pkg."::.APPL"}=$self);
+   }
    my $dir;
    if (-d ($dir=$self->top."/perllib")) {
       push @{$self->myINC}, [ $dir ];
@@ -205,24 +209,30 @@ sub add {
 sub lookup {
    $repository{$_[1]}
 }
-sub list {
+sub list_loaded {
    values %repository;
-}
-sub known {
-   keys %repository;
 }
 sub delete {
    delete $repository{$_[1]};
 }
 
-sub try_add {
-   foreach my $dir ($InstallTop, map { $_->dir } @Extension::active[$Extension::num_bundled .. $#Extension::active]) {
-      if (-d "$dir/apps/$_[1]") {
-         return eval { &add };
+# try to load the application APP
+# when an expression APP::FUNCTION(...) is encountered in the user input
+sub try_auto_load {
+   my ($app_name)=@_;
+   my $found;
+   namespaces::temp_disable(0);
+   if ($app_name =~ /^$id_re$/o && !exists $repository{$app_name}) {
+      foreach my $dir ($InstallTop, map { $_->dir } @Extension::active[$Extension::num_bundled .. $#Extension::active]) {
+         if (-d "$dir/apps/$app_name") {
+            $found=defined( eval { add(__PACKAGE__, $app_name) } );
+            last;
+         }
       }
    }
-   undef
+   $found
 }
+
 #################################################################################
 # "rulefile" => ( full_path, extension, rule_key, cached_result_code )
 # 'rule_key' is a string used as a key in various maps like rulefiles, configured, or rule_code
@@ -351,6 +361,7 @@ sub include_rules {
          }
       } else {
          # initializing the application or its main part in an extension
+         local $CPlusPlus::code_generation="" if $CPlusPlus::code_generation eq "private";
          $self->declared &= ~$cpp_load_initiated;
          if ($rc_all=include_rule($self, "main.rules", 1)) {
             unless ($self->declared & $cpp_load_initiated) {
@@ -403,9 +414,12 @@ sub eval_type {
    $self->eval_expr->($allow_generic && $expr !~ /[<>]/ ? "typeof_gen $expr" : "typeof $expr")
 }
 
-# called from C++ clients
-sub eval_type_throw {
-   &eval_type // croak( $@ =~ /^invalid type expression/ ? "$& $_[1]" : "Error processing type expression $_[1]: $@" );
+# called from C++ library
+sub construct_type {
+   my ($self, $typename)=splice @_, 0, 2;
+   local @ARGV=@_ and my $params='(@ARGV)';
+   $self->eval_expr->("typeof $typename$params")
+     // croak( $@ =~ /^invalid type expression/ ? "$& $typename" : "Error processing type expression $typename: $@" );
 }
 #################################################################################
 sub set_file_suffix {
@@ -545,7 +559,14 @@ sub find_custom_var {
 # for clients and callable library:
 # 'prefixed varname', [key] => value
 sub get_custom_var {
-   my $var=find_custom_var($User::application, shift, $Prefs->custom);
+   my $var_name=shift;
+   my $var;
+   if ($var_name =~ /^.($id_re)::/o && defined(my $app=$repository{$1})) {
+      $var_name=substr($var_name,0,1).$';
+      $var=find_custom_var($app, $var_name);
+   } else {
+      $var=find_custom_var($User::application, $var_name, $Prefs->custom);
+   }
    no strict 'refs';
    if ($var->prefix eq '%') {
       if (@_) {
@@ -600,11 +621,6 @@ sub add_label {
    $label->set_application($self, $extension);
    $label
 }
-
-sub add_labels {
-   my ($self, $labels)=@_;
-   map { add_label($self, $_) } split /\s*,\s*/, $labels
-}
 #################################################################################
 sub prefer {
    my $self=shift;
@@ -649,9 +665,8 @@ sub disable_rules {
       die "usage: disable_rules(\"label\" || \"OUTPUT : INPUT\")\n";
    }
 }
-
 #################################################################################
-package _::SuspendedItems;
+package Polymake::Core::Application::SuspendedItems;
 
 use Polymake::Struct (
    [ new => '$$@' ],
@@ -721,6 +736,7 @@ sub harvest {
             local_unshift(\@INC, $app);
             local_scalar($app->compile_scope, new Scope());
             eval {
+               local $CPlusPlus::code_generation="" if $CPlusPlus::code_generation eq "private";
                if (@{$self->rulefiles}) {
                   delete @{$app->rulefiles}{@{$self->rule_keys}};
                   delete @INC{ map { "rules:$_" } @{$self->rulefiles} };

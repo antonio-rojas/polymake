@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -20,37 +20,37 @@
 #include "polymake/Map.h"
 #include "polymake/ideal/internal/singularTermOrderData.h"
 
-#include <Singular/libsingular.h>
+#include "polymake/ideal/internal/singularInclude.h"
 
 namespace polymake { 
 namespace ideal {
 namespace singular {
 
-class SingularTermOrderMap{
-   
-   Map<std::pair<Ring<>::id_type, SingularTermOrderData<Matrix<int> > >, idhdl> matrixOrderings;
-   Map<std::pair<Ring<>::id_type, SingularTermOrderData<Vector<int> > >, idhdl> vectorOrderings;
-   Map<std::pair<Ring<>::id_type, SingularTermOrderData<std::string > >, idhdl> singularOrderings;
+class SingularTermOrderMap {
+
+  Map<std::pair<int, SingularTermOrderData<Matrix<int>>>, idhdl> matrixOrderings;
+  Map<std::pair<int, SingularTermOrderData<Vector<int>>>, idhdl> vectorOrderings;
+  Map<std::pair<int, SingularTermOrderData<std::string>>, idhdl> singularOrderings;
 
 public:
     // Assignment operators:
-    idhdl& operator [] (const std::pair<Ring<>::id_type, SingularTermOrderData<Matrix<int> > > &pair){
+    idhdl& operator [] (const std::pair<int, SingularTermOrderData<Matrix<int> > > &pair){
         return matrixOrderings[pair];
     }
-    idhdl& operator [] (const std::pair<Ring<>::id_type, SingularTermOrderData<Vector<int> > > &pair){
+    idhdl& operator [] (const std::pair<int, SingularTermOrderData<Vector<int> > > &pair){
         return vectorOrderings[pair];
     }
-    idhdl& operator [] (const std::pair<Ring<>::id_type, SingularTermOrderData<std::string > > &pair){
+    idhdl& operator [] (const std::pair<int, SingularTermOrderData<std::string > > &pair){
         return singularOrderings[pair];
     }
     // Existence operators:
-    bool exists (const std::pair<Ring<>::id_type, SingularTermOrderData<Matrix<int> > > &pair){
+    bool exists (const std::pair<int, SingularTermOrderData<Matrix<int> > > &pair){
         return matrixOrderings.exists(pair);
     }
-    bool exists (const std::pair<Ring<>::id_type, SingularTermOrderData<Vector<int> > > &pair){
+    bool exists (const std::pair<int, SingularTermOrderData<Vector<int> > > &pair){
         return vectorOrderings.exists(pair);
     }
-    bool exists (const std::pair<Ring<>::id_type, SingularTermOrderData<std::string > > &pair){
+    bool exists (const std::pair<int, SingularTermOrderData<std::string > > &pair){
         return singularOrderings.exists(pair);
     }
 };

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -59,8 +59,5 @@ UserFunctionTemplate4perl("# @category Optimization"
            "# | one: -x1 >= -1"
            "# | two: x2 >= -1"
            "# | three: -x2 >= -1",
-           "print_constraints<Scalar>(Cone<Scalar>; { ineq_labels => undef, eq_labels => undef }) : void");
-
-
-
-}}
+           "print_constraints<Scalar>(Cone<Scalar>; { ineq_labels => undef, eq_labels => undef })");
+} }

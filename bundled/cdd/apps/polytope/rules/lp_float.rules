@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -16,12 +16,12 @@
 object Polytope<Float> {
 
 rule cdd.simplex: LP.MAXIMAL_VALUE, LP.MAXIMAL_VERTEX, FEASIBLE : LP.LINEAR_OBJECTIVE, FACETS | INEQUALITIES {
-   cdd_solve_lp($this, $this->LP, 1);
+   cdd_lp_client($this, $this->LP, true);
 }
 weight 3.10;
 
 rule cdd.simplex: LP.MINIMAL_VALUE, LP.MINIMAL_VERTEX, FEASIBLE : LP.LINEAR_OBJECTIVE, FACETS | INEQUALITIES {
-   cdd_solve_lp($this, $this->LP, 0);
+   cdd_lp_client($this, $this->LP, false);
 }
 weight 3.10;
 

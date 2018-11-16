@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -82,6 +82,9 @@ namespace pm {
     - Set is a container class for sparse sets of ordered elements.  Data
       representation as a modified kind of AVL tree.
 
+    - PowerSet is a Set of Sets, providing methods for adding elements while
+      preserving subset or superset independence.
+
     @subsection vector_sec Vector Types
 
     The vector class family implement vectors in the usual algebraic notion.
@@ -97,9 +100,6 @@ namespace pm {
       ElementType(), which is 0 for most numerical types) are not stored, but
       implicitly encoded by the gaps in the key set.  It is based on an AVL
       tree.
-    
-    - FixedVector is a built-in array of a fixed dimension decorated with the
-      common vector interface.
 
     @subsection matrix_sec Matrix Types
 

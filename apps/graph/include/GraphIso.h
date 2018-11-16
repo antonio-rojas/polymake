@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -26,13 +26,13 @@
 
 namespace polymake { namespace graph {
 
-//! An opaque graph representation for libraries chacking for isomorphism (nauty, bliss)
+//! An opaque graph representation for libraries checking for isomorphism (nauty, bliss)
 class GraphIso {
    struct impl;
    impl *p_impl;
 
    int n_autom;
-   std::list< Array<int> > autom;
+   std::list<Array<int>> autom;
 
    static impl *alloc_impl(int n_nodes, bool is_directed, bool is_colored=false);
    void add_edge(int from, int to);
@@ -91,13 +91,14 @@ public:
       : p_impl(alloc_impl(M.rows()+M.cols(), false))
       , n_autom(0)
    {
-      int rnode=M.cols();
-      partition(rnode);
-      for (auto r=entire(rows(M));  !r.at_end();  ++r, ++rnode)
-         for (auto c=entire(*r);  !c.at_end();  ++c) {
-            add_edge(rnode, *c);
-            add_edge(*c, rnode);
-         }
+      if (int rnode=M.cols()) {
+         partition(rnode);
+         for (auto r=entire(rows(M));  !r.at_end();  ++r, ++rnode)
+            for (auto c=entire(*r);  !c.at_end();  ++c) {
+               add_edge(rnode, *c);
+               add_edge(*c, rnode);
+            }
+      }
       finalize(gather_automorphisms);
    }
 
@@ -133,10 +134,10 @@ public:
    static bool prepare_colored(GraphIso& GI, const GenericGraph<TGraph>& G, const Colors& colors);
 
    Array<int> find_permutation(const GraphIso& g2) const;
-   std::pair< Array<int>, Array<int> > find_permutations(const GraphIso& g2, int n_cols) const;
+   std::pair<Array<int>, Array<int>> find_permutations(const GraphIso& g2, int n_cols) const;
 
    int n_automorphisms() const { return n_autom; }
-   const std::list< Array<int> >& automorphisms() const { return autom; }
+   const std::list<Array<int>>& automorphisms() const { return autom; }
 
    Array<int> canonical_perm() const;
    long hash(long key) const;
@@ -316,10 +317,10 @@ bool GraphIso::prepare_colored(GraphIso& GI1, const GenericGraph<TGraph1>& G1, c
 
    GI2.copy_colors(GI1);
 
-   for (auto c=ensure(colors1, (pm::cons<pm::end_sensitive, pm::indexed>*)0).begin(); !c.at_end(); ++c)
+   for (auto c=entire<indexed>(colors1); !c.at_end(); ++c)
       GI1.set_node_color(c.index(), color_map[*c]);
 
-   for (auto c=ensure(colors2, (pm::cons<pm::end_sensitive, pm::indexed>*)0).begin(); !c.at_end(); ++c)
+   for (auto c=entire<indexed>(colors2); !c.at_end(); ++c)
       GI2.set_node_color(c.index(), color_map[*c]);
 
    GI1.fill(G1);  GI1.finalize(false);
@@ -342,7 +343,7 @@ bool GraphIso::prepare_colored(GraphIso& GI, const GenericGraph<TGraph>& G, cons
    for (auto cm=color_map.begin(); !cm.at_end(); ++cm)
       GI.next_color(cm->second);
 
-   for (auto c=ensure(colors, (pm::cons<pm::end_sensitive, pm::indexed>*)0).begin(); !c.at_end(); ++c)
+   for (auto c=entire<indexed>(colors); !c.at_end(); ++c)
       GI.set_node_color(c.index(), color_map[*c]);
 
    GI.fill(G);  GI.finalize(true);
@@ -360,12 +361,21 @@ typename TGraph::persistent_type canonical_form(const GenericGraph<TGraph>& G)
    else
       return permuted_nodes(G, GI.canonical_perm());
 }
+
 template <typename TGraph> inline
 long canonical_hash(const GenericGraph<TGraph>& G, long k)
 {
    GraphIso GI(G);
    return GI.hash(k);
 }
+
+template <typename TMatrix> inline
+long canonical_hash(const GenericIncidenceMatrix<TMatrix>& M, long k)
+{
+   GraphIso GI(M);
+   return GI.hash(k);
+}
+
 } }
 
 #endif // POLYMAKE_GRAPH_GRAPHISO_H

@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -14,13 +14,15 @@
 --------------------------------------------------------------------------------
 */
 
+#include "polymake/topaz/hasse_diagram.h"
+
 namespace polymake { namespace topaz {
 
 // return values: 1=true, 0=false, -1=undef (does not occur here)
 template <typename Complex, typename VertexSet>
 int is_ball_or_sphere(const Complex& C, const GenericSet<VertexSet>& V, int_constant<2>)
 {
-   HasseDiagram HD=pure_hasse_diagram(C);
+   graph::Lattice<graph::lattice::BasicDecoration> HD= hasse_diagram_from_facets(Array<Set<int> >(C));
 
    // check whether C is a pseudo_manifold and compute the boundary B
    std::list< Set<int> > B;
@@ -36,7 +38,7 @@ int is_ball_or_sphere(const Complex& C, const GenericSet<VertexSet>& V, int_cons
    // check euler char of S
    // if (B.empty())  S = -1 + #vert - #edges_of_C + #C
    // else            S = -1 + (#vert + 1) - (#edges_of_C + #B) + (#C + #B)
-   int euler_char= V.top().size() - HD.nodes_of_dim(-2).size() + C.size();
+   int euler_char= V.top().size() - HD.nodes_of_rank(HD.rank()-2).size() + C.size();
    if (B_is_empty) --euler_char;
 
    if (euler_char!=1) return 0;

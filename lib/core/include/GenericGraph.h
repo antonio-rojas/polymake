@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2016
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -77,11 +77,17 @@ public:
    int dim() const { return this->hidden().dim(); }
 };
 
-template <typename Graph, bool directed=Graph::is_directed,
-          bool _is_masquerade=attrib<typename Graph::out_edge_list_ref>::is_reference>
+template <typename TGraph, bool directed=TGraph::is_directed,
+          bool TMasquerade=attrib<typename TGraph::out_edge_list_ref>::is_reference>
 struct edge_container_impl;
 
 } // end namespace pm::graph
+
+template <typename TGraph, typename dir_val=typename TGraph::dir>
+class GenericGraph;
+
+template <typename T, typename... Dir>
+using is_generic_graph = is_derived_from_instance_of<pure_type_t<T>, GenericGraph, Dir...>;
 
 /** @class GenericGraph
     @brief @ref generic "Generic type" for all graph classes.
@@ -89,20 +95,20 @@ struct edge_container_impl;
     Defines various types and constants.
 */
 
-template <typename GraphTop, typename dir_val=typename GraphTop::dir>
+template <typename TGraph, typename dir_val>
 class GenericGraph
-   : public Generic<GraphTop> {
+   : public Generic<TGraph> {
 protected:
    GenericGraph() {}
    GenericGraph(const GenericGraph&) {}
 
 public:
-   typedef dir_val dir;
-   static const bool is_directed=dir::value==graph::Directed::value;
-   static const bool is_multigraph=dir::multigraph;
-   typedef GenericGraph generic_type;
-   typedef graph::Graph<dir> persistent_type;
-   typedef typename Generic<GraphTop>::top_type top_type;
+   using dir = dir_val;
+   static constexpr bool is_directed=dir::value==graph::Directed::value;
+   static constexpr bool is_multigraph=dir::multigraph;
+   using generic_type = GenericGraph;
+   using persistent_type = graph::Graph<dir>;
+   using typename Generic<TGraph>::top_type;
 
    template <typename Result>
    struct rebind_generic {
@@ -115,104 +121,125 @@ public:
       return this->top().nodes();
    }
 
-   // Shortcuts for operations on adjacency matrices.
-   // Note that .
+   constexpr bool has_gaps() { return false; }
 
-   template <typename Graph2>
-   top_type& operator+= (const GenericGraph<Graph2>& g2)
+   // Shortcuts for operations on adjacency matrices.
+
+   template <typename TGraph2>
+   top_type& operator+= (const GenericGraph<TGraph2>& g2)
    {
       static_assert(!is_multigraph, "in-place modification of a multigraph is not defined");
-      if (POLYMAKE_DEBUG || !Unwary<GraphTop>::value || !Unwary<Graph2>::value) {
+      if (POLYMAKE_DEBUG || is_wary<TGraph>() || is_wary<TGraph2>()) {
          if (this->top().nodes() != g2.top().nodes())
             throw std::runtime_error("GenericGraph::operator+= - dimension mismatch");
+         if (this->top().has_gaps() || g2.top().has_gaps())
+            throw std::runtime_error("GenericGraph::operator+= - not supported for graphs with deleted nodes");
       }
       adjacency_matrix(this->top()) += adjacency_matrix(g2.top());
       return this->top();
    }
 
-   template <typename Graph2>
-   top_type& operator-= (const GenericGraph<Graph2>& g2)
+   template <typename TGraph2>
+   top_type& operator-= (const GenericGraph<TGraph2>& g2)
    {
       static_assert(!is_multigraph, "in-place modification of a multigraph is not defined");
-      if (POLYMAKE_DEBUG || !Unwary<GraphTop>::value || !Unwary<Graph2>::value) {
+      if (POLYMAKE_DEBUG || is_wary<TGraph>() || is_wary<TGraph2>()) {
          if (this->top().nodes() != g2.top().nodes())
             throw std::runtime_error("GenericGraph::operator-= - dimension mismatch");
+         if (this->top().has_gaps() || g2.top().has_gaps())
+            throw std::runtime_error("GenericGraph::operator-= - not supported for graphs with deleted nodes");
       }
       adjacency_matrix(this->top()) -= adjacency_matrix(g2.top());
       return this->top();
    }
 
-   template <typename Graph2>
-   top_type& operator*= (const GenericGraph<Graph2>& g2)
+   template <typename TGraph2>
+   top_type& operator*= (const GenericGraph<TGraph2>& g2)
    {
       static_assert(!is_multigraph, "in-place modification of a multigraph is not defined");
-      if (POLYMAKE_DEBUG || !Unwary<GraphTop>::value || !Unwary<Graph2>::value) {
+      if (POLYMAKE_DEBUG || is_wary<TGraph>() || is_wary<TGraph2>()) {
          if (this->top().nodes() != g2.top().nodes())
             throw std::runtime_error("GenericGraph::operator*= - dimension mismatch");
+         if (this->top().has_gaps() || g2.top().has_gaps())
+            throw std::runtime_error("GenericGraph::operator*= - not supported for graphs with deleted nodes");
       }
       adjacency_matrix(this->top()) *= adjacency_matrix(g2.top());
       return this->top();
    }
 
-   template <typename Graph2>
-   top_type& operator^= (const GenericGraph<Graph2>& g2)
+   template <typename TGraph2>
+   top_type& operator^= (const GenericGraph<TGraph2>& g2)
    {
       static_assert(!is_multigraph, "in-place modification of a multigraph is not defined");
-      if (POLYMAKE_DEBUG || !Unwary<GraphTop>::value || !Unwary<Graph2>::value) {
+      if (POLYMAKE_DEBUG || is_wary<TGraph>() || is_wary<TGraph2>()) {
          if (this->top().nodes() != g2.top().nodes())
             throw std::runtime_error("GenericGraph::operator^= - dimension mismatch");
+         if (this->top().has_gaps() || g2.top().has_gaps())
+            throw std::runtime_error("GenericGraph::operator^= - not supported for graphs with deleted nodes");
       }
       adjacency_matrix(this->top()) ^= adjacency_matrix(g2.top());
       return this->top();
    }
 
-   template <typename Graph2>
-   using graph_overlay_t = graph::Graph<typename std::conditional<dir::value==Graph2::dir::value, dir, graph::Directed>::type>;
+   template <typename TGraph2>
+   using graph_overlay_t = graph::Graph<std::conditional_t<dir::value==TGraph2::dir::value, dir, graph::Directed>>;
 
-   template <typename Graph2>
-   graph_overlay_t<Graph2> operator+ (const GenericGraph<Graph2>& g2) const
+   template <typename TGraph2>
+   graph_overlay_t<TGraph2> operator+ (const GenericGraph<TGraph2>& g2) const
    {
-      if (POLYMAKE_DEBUG || !Unwary<GraphTop>::value || !Unwary<Graph2>::value) {
+      if (POLYMAKE_DEBUG || is_wary<TGraph>() || is_wary<TGraph2>()) {
          if (this->top().nodes() != g2.top().nodes())
             throw std::runtime_error("GenericGraph::operator+ - dimension mismatch");
+         if (this->top().has_gaps() || g2.top().has_gaps())
+            throw std::runtime_error("GenericGraph::operator+ - not supported for graphs with deleted nodes");
       }
-      return graph_overlay_t<Graph2>(this->top()) += g2;
+      return graph_overlay_t<TGraph2>(this->top()) += g2;
    }
 
-   template <typename Graph2>
+   template <typename TGraph2>
    graph::Graph<typename dir::non_multi_type>
-   operator- (const GenericGraph<Graph2>& g2) const
+   operator- (const GenericGraph<TGraph2>& g2) const
    {
-      if (POLYMAKE_DEBUG || !Unwary<GraphTop>::value || !Unwary<Graph2>::value) {
+      if (POLYMAKE_DEBUG || is_wary<TGraph>() || is_wary<TGraph2>()) {
          if (this->top().nodes() != g2.top().nodes())
             throw std::runtime_error("GenericGraph::operator- - dimension mismatch");
+         if (this->top().has_gaps() || g2.top().has_gaps())
+            throw std::runtime_error("GenericGraph::operator- - not supported for graphs with deleted nodes");
       }
       return graph::Graph<typename dir::non_multi_type>(this->top()) -= g2;
    }
 
-   template <typename Graph2>
-   graph_overlay_t<Graph2> operator* (const GenericGraph<Graph2>& g2) const
+   template <typename TGraph2>
+   graph_overlay_t<TGraph2> operator* (const GenericGraph<TGraph2>& g2) const
    {
-      if (POLYMAKE_DEBUG || !Unwary<GraphTop>::value || !Unwary<Graph2>::value) {
+      if (POLYMAKE_DEBUG || is_wary<TGraph>() || is_wary<TGraph2>()) {
          if (this->top().nodes() != g2.top().nodes())
             throw std::runtime_error("GenericGraph::operator* - dimension mismatch");
+         if (this->top().has_gaps() || g2.top().has_gaps())
+            throw std::runtime_error("GenericGraph::operator* - not supported for graphs with deleted nodes");
       }
-      return graph_overlay_t<Graph2>(this->top()) *= g2;
+      return graph_overlay_t<TGraph2>(this->top()) *= g2;
    }
 
-   template <typename Graph2>
-   graph_overlay_t<Graph2> operator^ (const GenericGraph<Graph2>& g2) const
+   template <typename TGraph2>
+   graph_overlay_t<TGraph2> operator^ (const GenericGraph<TGraph2>& g2) const
    {
-      if (POLYMAKE_DEBUG || !Unwary<GraphTop>::value || !Unwary<Graph2>::value) {
+      if (POLYMAKE_DEBUG || is_wary<TGraph>() || is_wary<TGraph2>()) {
          if (this->top().nodes() != g2.top().nodes())
             throw std::runtime_error("GenericGraph::operator^ - dimension mismatch");
+         if (this->top().has_gaps() || g2.top().has_gaps())
+            throw std::runtime_error("GenericGraph::operator^ - not supported for graphs with deleted nodes");
       }
-      return graph_overlay_t<Graph2>(this->top()) ^= g2;
+      return graph_overlay_t<TGraph2>(this->top()) ^= g2;
    }
 
    graph::Graph<typename dir::non_multi_type>
    operator~ () const
    {
+      if (POLYMAKE_DEBUG || is_wary<TGraph>()) {
+         if (this->top().has_gaps())
+            throw std::runtime_error("GenericGraph::operator~ - not supported for graphs with deleted nodes");
+      }
       graph::Graph<typename dir::non_multi_type> Gcompl(nodes());
       adjacency_matrix(Gcompl) = ~adjacency_matrix(*this);
       return Gcompl;
@@ -235,113 +262,113 @@ public:
 #endif
 };
 
-template <typename Graph>
+template <typename TGraph>
 class Nodes
-   : public redirected_container< Nodes<Graph>,
-                                  mlist< ContainerTag< typename Graph::node_container_ref >,
+   : public redirected_container< Nodes<TGraph>,
+                                  mlist< ContainerRefTag< typename TGraph::node_container_ref >,
                                          MasqueradedTop > >
-   , public GenericSet<Nodes<Graph>, int, operations::cmp> {
+   , public GenericSet<Nodes<TGraph>, int, operations::cmp> {
 protected:
    Nodes();
    ~Nodes();
 public:
-   typename Graph::node_container_ref get_container()
+   typename TGraph::node_container_ref get_container()
    {
-      return this->hidden().template pretend<typename Graph::node_container_ref>();
+      return this->hidden().template pretend<typename TGraph::node_container_ref>();
    }
-   typename Graph::const_node_container_ref get_container() const
+   typename TGraph::const_node_container_ref get_container() const
    {
-      return this->hidden().template pretend<typename Graph::const_node_container_ref>();
+      return this->hidden().template pretend<typename TGraph::const_node_container_ref>();
    }
 };
 
-template <typename Graph>
+template <typename TGraph>
 class Edges
-   : public cascade_impl< Edges<Graph>,
-                          mlist< ContainerTag< typename graph::edge_container_impl<Graph>::container >,
+   : public cascade_impl< Edges<TGraph>,
+                          mlist< ContainerTag< typename graph::edge_container_impl<TGraph>::container >,
                                  CascadeDepth< int_constant<2> >,
                                  MasqueradedTop > >
-   , public graph::edge_container_impl<Graph> {
+   , public graph::edge_container_impl<TGraph> {
 protected:
    Edges();
    ~Edges();
 public:
-   using graph::edge_container_impl<Graph>::get_container;
+   using graph::edge_container_impl<TGraph>::get_container;
    int size() const { return this->hidden().edges(); }
    int max_size() const { return size(); }
 };
 
 namespace graph {
 
-template <typename Top, typename Graph>
+template <typename Top, typename TGraph>
 struct edge_container_access {
-   typedef typename Graph::out_edge_list_container container;
-   typedef typename Graph::out_edge_list_container_ref container_ref;
-   typedef typename Graph::const_out_edge_list_container_ref const_container_ref;
+   typedef typename TGraph::out_edge_list_container container;
+   typedef typename TGraph::out_edge_list_container_ref container_ref;
+   typedef typename TGraph::const_out_edge_list_container_ref const_container_ref;
 
    container_ref get_container() { return static_cast<Top*>(this)->hidden().template pretend<container_ref>(); }
    const_container_ref get_container() const { return static_cast<const Top*>(this)->hidden().template pretend<const_container_ref>(); }
 };
 
-template <typename Graph, bool _is_masquerade>
-struct edge_container_impl<Graph, true, _is_masquerade> :
-   edge_container_access<Edges<Graph>, Graph> {};
+template <typename TGraph, bool _is_masquerade>
+struct edge_container_impl<TGraph, true, _is_masquerade> :
+   edge_container_access<Edges<TGraph>, TGraph> {};
 
-template <typename Graph>
-struct edge_container_impl<Graph, false, true> {
-   typedef edge_container_impl<Graph, true, true> base_t;
+template <typename TGraph>
+struct edge_container_impl<TGraph, false, true> {
+   typedef edge_container_impl<TGraph, true, true> base_t;
 
-   class container :
-      public modified_container_impl< container,
-                                      mlist< HiddenTag< Graph >,
-                                             ContainerTag< typename base_t::container_ref >,
-                                             OperationTag< operations::masquerade<uniq_edge_list> > > >,
-      public edge_container_access<container, Graph> {
+   class container
+      : public modified_container_impl< container,
+                                        mlist< HiddenTag< TGraph >,
+                                               ContainerRefTag< typename base_t::container_ref >,
+                                               OperationTag< operations::masquerade<uniq_edge_list> > > >
+      , public edge_container_access<container, TGraph> {
    public:
-      using edge_container_access<container, Graph>::get_container;
+      using edge_container_access<container, TGraph>::get_container;
    };
 
-   container& get_container() { return reinterpret_cast<container&>(static_cast<Edges<Graph>*>(this)->hidden()); }
-   const container& get_container() const { return reinterpret_cast<const container&>(static_cast<const Edges<Graph>*>(this)->hidden()); }
+   container& get_container() { return reinterpret_cast<container&>(static_cast<Edges<TGraph>*>(this)->hidden()); }
+   const container& get_container() const { return reinterpret_cast<const container&>(static_cast<const Edges<TGraph>*>(this)->hidden()); }
 };
 
-template <typename Graph>
-struct edge_container_impl<Graph, false, false> {
-   typedef edge_container_impl<Graph, true, false> base_t;
+template <typename TGraph>
+struct edge_container_impl<TGraph, false, false> {
+   typedef edge_container_impl<TGraph, true, false> base_t;
    typedef operations::construct_unary2<TruncatedContainer, BuildUnaryIt<uniq_edge_predicate> > operation;
 
-   class container :
-      public modified_container_impl< container,
-                                      mlist< HiddenTag< Graph >,
-                                             ContainerTag< typename base_t::container_ref >,
-                                             OperationTag< operation > > >,
-      public edge_container_access<container, Graph> {
+   class container
+      : public modified_container_impl< container,
+                                        mlist< HiddenTag< TGraph >,
+                                               ContainerRefTag< typename base_t::container_ref >,
+                                               OperationTag< operation > > >
+      , public edge_container_access<container, TGraph> {
    public:
-      using edge_container_access<container, Graph>::get_container;
+      using edge_container_access<container, TGraph>::get_container;
    };
 
-   class const_container :
-      public modified_container_impl< const_container,
-                                      mlist< HiddenTag< Graph >,
-                                             ContainerTag< typename base_t::const_container_ref >,
-                                             OperationTag< operation > > >,
-      public edge_container_access<const_container,Graph> {
+   class const_container
+      : public modified_container_impl< const_container,
+                                        mlist< HiddenTag< TGraph >,
+                                               ContainerRefTag< typename base_t::const_container_ref >,
+                                               OperationTag< operation > > >
+      , public edge_container_access<const_container, TGraph> {
    public:
-      using edge_container_access<const_container,Graph>::get_container;
+      using edge_container_access<const_container, TGraph>::get_container;
    };
 
-   container& get_container() { return reinterpret_cast<container&>(static_cast<Edges<Graph>*>(this)->hidden()); }
-   const const_container& get_container() const { return reinterpret_cast<const const_container&>(static_cast<const Edges<Graph>*>(this)->hidden()); }
+   container& get_container() { return reinterpret_cast<container&>(static_cast<Edges<TGraph>*>(this)->hidden()); }
+   const const_container& get_container() const { return reinterpret_cast<const const_container&>(static_cast<const Edges<TGraph>*>(this)->hidden()); }
 };
 
 } // end namespace graph
 
-template <typename Graph, bool is_multigraph=Graph::is_multigraph>
+template <typename TGraph, bool TMultigraph=TGraph::is_multigraph>
 class AdjacencyMatrix;
 
-template <typename Graph>
-class AdjacencyMatrix<Graph, false> :
-   public GenericIncidenceMatrix< AdjacencyMatrix<Graph, false> > {
+template <typename TGraph>
+class AdjacencyMatrix<TGraph, false>
+   : public GenericIncidenceMatrix< AdjacencyMatrix<TGraph, false> > {
 protected:
    AdjacencyMatrix();
    ~AdjacencyMatrix();
@@ -350,13 +377,13 @@ public:
    typedef bool reference;
    typedef const bool const_reference;
 
-   Graph& hidden() { return reinterpret_cast<Graph&>(*this); }
-   const Graph& hidden() const { return reinterpret_cast<const Graph&>(*this); }
+   TGraph& hidden() { return reinterpret_cast<TGraph&>(*this); }
+   const TGraph& hidden() const { return reinterpret_cast<const TGraph&>(*this); }
 };
 
-template <typename Graph>
-class AdjacencyMatrix<Graph, true> :
-   public GenericMatrix< AdjacencyMatrix<Graph, true>, int > {
+template <typename TGraph>
+class AdjacencyMatrix<TGraph, true>
+   : public GenericMatrix< AdjacencyMatrix<TGraph, true>, int > {
 protected:
    AdjacencyMatrix();
    ~AdjacencyMatrix();
@@ -365,181 +392,203 @@ public:
    typedef int reference;
    typedef const int const_reference;
 
-   Graph& hidden() { return reinterpret_cast<Graph&>(*this); }
-   const Graph& hidden() const { return reinterpret_cast<const Graph&>(*this); }
+   TGraph& hidden() { return reinterpret_cast<TGraph&>(*this); }
+   const TGraph& hidden() const { return reinterpret_cast<const TGraph&>(*this); }
 };
 
-template <typename Graph, bool is_multigraph>
-struct check_container_feature< AdjacencyMatrix<Graph, is_multigraph>, Symmetric >
-   : bool_constant< !Graph::is_directed > {};
+template <typename TGraph, bool TMultigraph>
+struct check_container_feature< AdjacencyMatrix<TGraph, TMultigraph>, Symmetric >
+   : bool_constant< !TGraph::is_directed > {};
 
-template <typename Graph>
-struct check_container_feature< AdjacencyMatrix<Graph, true>, pure_sparse > : std::true_type {};
+template <typename TGraph>
+struct check_container_feature< AdjacencyMatrix<TGraph, true>, pure_sparse >
+   : std::true_type {};
 
-template <typename Graph>
-class matrix_random_access_methods< AdjacencyMatrix<Graph, false> > {
+template <typename TGraph>
+class matrix_random_access_methods< AdjacencyMatrix<TGraph, false> > {
 public:
    bool operator() (int i, int j) const
    {
-      return static_cast<const AdjacencyMatrix<Graph>&>(*this).hidden().edge_exists(i,j);
+      return static_cast<const AdjacencyMatrix<TGraph>&>(*this).hidden().edge_exists(i,j);
    }
 };
 
-template <typename Graph>
-class matrix_random_access_methods< AdjacencyMatrix<Graph, true> > {
+template <typename TGraph>
+class matrix_random_access_methods< AdjacencyMatrix<TGraph, true> > {
 public:
    int operator() (int i, int j) const
    {
-      return count_it(static_cast<const AdjacencyMatrix<Graph>&>(*this).hidden().all_edges(i,j));
+      return count_it(static_cast<const AdjacencyMatrix<TGraph>&>(*this).hidden().all_edges(i,j));
    }
 };
 
-template <typename Graph, bool TMultigraph>
-class Rows< AdjacencyMatrix<Graph, TMultigraph> >
-   : public redirected_container< Rows< AdjacencyMatrix<Graph, TMultigraph> >,
-                                  mlist< ContainerTag< typename Graph::adjacency_rows_container_ref >,
-                                         HiddenTag< Graph > > > {
+template <typename TGraph, bool TMultigraph>
+class Rows< AdjacencyMatrix<TGraph, TMultigraph> >
+   : public redirected_container< Rows< AdjacencyMatrix<TGraph, TMultigraph> >,
+                                  mlist< ContainerRefTag< typename TGraph::adjacency_rows_container_ref >,
+                                         HiddenTag< TGraph > > > {
 public:
-   typename Graph::adjacency_rows_container_ref get_container()
+   typename TGraph::adjacency_rows_container_ref get_container()
    {
-      return this->hidden().template pretend<typename Graph::adjacency_rows_container_ref>();
+      return this->hidden().template pretend<typename TGraph::adjacency_rows_container_ref>();
    }
-   typename Graph::const_adjacency_rows_container_ref get_container() const
+   typename TGraph::const_adjacency_rows_container_ref get_container() const
    {
-      return this->hidden().template pretend<typename Graph::const_adjacency_rows_container_ref>();
+      return this->hidden().template pretend<typename TGraph::const_adjacency_rows_container_ref>();
+   }
+
+   int dim() const { return this->hidden().dim(); }
+
+   bool prefer_sparse_representation() const
+   {
+      return this->hidden().has_gaps();
    }
 };
 
-template <typename Graph, bool TMultigraph>
-class Cols< AdjacencyMatrix<Graph, TMultigraph> >
-   : public redirected_container< Cols< AdjacencyMatrix<Graph, TMultigraph> >,
-                                  mlist< ContainerTag< typename Graph::adjacency_cols_container >,
-                                         HiddenTag< Graph > > > {
+template <typename TGraph, bool TMultigraph>
+class Cols< AdjacencyMatrix<TGraph, TMultigraph> >
+   : public redirected_container< Cols< AdjacencyMatrix<TGraph, TMultigraph> >,
+                                  mlist< ContainerRefTag< typename TGraph::adjacency_cols_container_ref >,
+                                         HiddenTag< TGraph > > > {
 public:
-   typename Graph::adjacency_cols_container_ref get_container()
+   typename TGraph::adjacency_cols_container_ref get_container()
    {
-      return this->hidden().template pretend<typename Graph::adjacency_cols_container_ref>();
+      return this->hidden().template pretend<typename TGraph::adjacency_cols_container_ref>();
    }
-   typename Graph::const_adjacency_cols_container_ref get_container() const
+   typename TGraph::const_adjacency_cols_container_ref get_container() const
    {
-      return this->hidden().template pretend<typename Graph::const_adjacency_cols_container_ref>();
+      return this->hidden().template pretend<typename TGraph::const_adjacency_cols_container_ref>();
+   }
+
+   int dim() const { return this->hidden().dim(); }
+
+   bool prefer_sparse_representation() const
+   {
+      return this->hidden().has_gaps();
    }
 };
 
-template <typename Graph> inline
-Nodes<unwary_t<Graph>>&
-nodes(GenericGraph<Graph>& G)
+template <typename TGraph, bool TMultigraph>
+struct check_container_feature< Rows<AdjacencyMatrix<TGraph, TMultigraph>>, sparse> : std::true_type {};
+
+template <typename TGraph, bool TMultigraph>
+struct check_container_feature< Cols<AdjacencyMatrix<TGraph, TMultigraph>>, sparse> : std::true_type {};
+
+
+template <typename TGraph> inline
+Nodes<unwary_t<TGraph>>&
+nodes(GenericGraph<TGraph>& G)
 {
-   return reinterpret_cast<Nodes<unwary_t<Graph>>&>(G.top());
+   return reinterpret_cast<Nodes<unwary_t<TGraph>>&>(G.top());
 }
 
-template <typename Graph> inline
-const Nodes<unwary_t<Graph>>&
-nodes(const GenericGraph<Graph>& G)
+template <typename TGraph> inline
+const Nodes<unwary_t<TGraph>>&
+nodes(const GenericGraph<TGraph>& G)
 {
-   return reinterpret_cast<const Nodes<unwary_t<Graph>>&>(G.top());
+   return reinterpret_cast<const Nodes<unwary_t<TGraph>>&>(G.top());
 }
 
-template <typename Graph> inline
-Edges<unwary_t<Graph>>&
-edges(GenericGraph<Graph>& G)
+template <typename TGraph> inline
+Edges<unwary_t<TGraph>>&
+edges(GenericGraph<TGraph>& G)
 {
-   return reinterpret_cast<Edges<unwary_t<Graph>>&>(G.top());
+   return reinterpret_cast<Edges<unwary_t<TGraph>>&>(G.top());
 }
 
-template <typename Graph> inline
-const Edges<unwary_t<Graph>>&
-edges(const GenericGraph<Graph>& G)
+template <typename TGraph> inline
+const Edges<unwary_t<TGraph>>&
+edges(const GenericGraph<TGraph>& G)
 {
-   return reinterpret_cast<const Edges<unwary_t<Graph>>&>(G.top());
+   return reinterpret_cast<const Edges<unwary_t<TGraph>>&>(G.top());
 }
 
-template <typename Graph> inline
-AdjacencyMatrix<unwary_t<Graph>>&
-adjacency_matrix(GenericGraph<Graph>& G)
+template <typename TGraph> inline
+AdjacencyMatrix<unwary_t<TGraph>>&
+adjacency_matrix(GenericGraph<TGraph>& G)
 {
-   return reinterpret_cast<AdjacencyMatrix<unwary_t<Graph>>&>(G.top());
+   return reinterpret_cast<AdjacencyMatrix<unwary_t<TGraph>>&>(G.top());
 }
 
-template <typename Graph> inline
-const AdjacencyMatrix<unwary_t<Graph>>&
-adjacency_matrix(const GenericGraph<Graph>& G)
+template <typename TGraph> inline
+const AdjacencyMatrix<unwary_t<TGraph>>&
+adjacency_matrix(const GenericGraph<TGraph>& G)
 {
-   return reinterpret_cast<const AdjacencyMatrix<unwary_t<Graph>>&>(G.top());
+   return reinterpret_cast<const AdjacencyMatrix<unwary_t<TGraph>>&>(G.top());
 }
 
-template <typename Graph> inline
-typename unwary_t<Graph>::out_edge_list_container_ref
-out_edge_lists(GenericGraph<Graph>& G)
+template <typename TGraph> inline
+typename unwary_t<TGraph>::out_edge_list_container_ref
+out_edge_lists(GenericGraph<TGraph>& G)
 {
-   return G.top().template pretend<typename unwary_t<Graph>::out_edge_list_container_ref>();
+   return G.top().template pretend<typename unwary_t<TGraph>::out_edge_list_container_ref>();
 }
-template <typename Graph> inline
-typename unwary_t<Graph>::const_out_edge_list_container_ref
-out_edge_lists(const GenericGraph<Graph>& G)
+template <typename TGraph> inline
+typename unwary_t<TGraph>::const_out_edge_list_container_ref
+out_edge_lists(const GenericGraph<TGraph>& G)
 {
-   return G.top().template pretend<typename unwary_t<Graph>::const_out_edge_list_container_ref>();
-}
-
-template <typename Graph> inline
-typename unwary_t<Graph>::in_edge_list_container_ref
-in_edge_lists(GenericGraph<Graph>& G)
-{
-   return G.top().template pretend<typename unwary_t<Graph>::in_edge_list_container_ref>();
-}
-template <typename Graph> inline
-typename unwary_t<Graph>::const_in_edge_list_container_ref
-in_edge_lists(const GenericGraph<Graph>& G)
-{
-   return G.top().template pretend<typename unwary_t<Graph>::const_in_edge_list_container_ref>();
+   return G.top().template pretend<typename unwary_t<TGraph>::const_out_edge_list_container_ref>();
 }
 
-template <typename Graph1, typename Graph2> inline
-bool operator== (const GenericGraph<Graph1>& G1, const GenericGraph<Graph2>& G2)
+template <typename TGraph> inline
+typename unwary_t<TGraph>::in_edge_list_container_ref
+in_edge_lists(GenericGraph<TGraph>& G)
+{
+   return G.top().template pretend<typename unwary_t<TGraph>::in_edge_list_container_ref>();
+}
+template <typename TGraph> inline
+typename unwary_t<TGraph>::const_in_edge_list_container_ref
+in_edge_lists(const GenericGraph<TGraph>& G)
+{
+   return G.top().template pretend<typename unwary_t<TGraph>::const_in_edge_list_container_ref>();
+}
+
+template <typename TGraph1, typename TGraph2> inline
+bool operator== (const GenericGraph<TGraph1>& G1, const GenericGraph<TGraph2>& G2)
 {
    if (G1.nodes() != G2.nodes()) return false;
    return adjacency_matrix(G1)==adjacency_matrix(G2);
 }
 
-template <typename Graph1, typename Graph2> inline
-bool operator!= (const GenericGraph<Graph1>& G1, const GenericGraph<Graph2>& G2)
+template <typename TGraph1, typename TGraph2> inline
+bool operator!= (const GenericGraph<TGraph1>& G1, const GenericGraph<TGraph2>& G2)
 {
    return !(G1==G2);
 }
 
 struct is_graph;
 
-template <typename Graph, typename dir>
-struct spec_object_traits< GenericGraph<Graph,dir> > :
-   spec_or_model_traits<Graph,is_opaque> {
+template <typename TGraph, typename dir>
+struct spec_object_traits< GenericGraph<TGraph, dir> >
+   : spec_or_model_traits<TGraph, is_opaque> {
    typedef is_graph generic_tag;
    static const bool IO_ends_with_eol=true;
 };
 
-template <typename Graph>
-struct spec_object_traits< Nodes<Graph> > :
-   spec_object_traits<is_container> {
-   typedef Graph masquerade_for;
+template <typename TGraph>
+struct spec_object_traits< Nodes<TGraph> >
+   : spec_object_traits<is_container> {
+   typedef TGraph masquerade_for;
    static const bool is_always_const=true;
 };
 
-template <typename Graph>
-struct spec_object_traits< Edges<Graph> > :
-   spec_object_traits<is_container> {
-   typedef Graph masquerade_for;
+template <typename TGraph>
+struct spec_object_traits< Edges<TGraph> >
+   : spec_object_traits<is_container> {
+   typedef TGraph masquerade_for;
    static const bool is_always_const=true;
 };
 
-template <typename Graph, bool is_multigraph>
-struct spec_object_traits< AdjacencyMatrix<Graph, is_multigraph> > :
-   spec_object_traits<is_container> {
-   typedef Graph masquerade_for;
-   static const bool is_always_const=object_traits<Graph>::is_always_const || is_multigraph;
-   static const int is_resizeable=object_traits<Graph>::is_resizeable;
+template <typename TGraph, bool TMultigraph>
+struct spec_object_traits< AdjacencyMatrix<TGraph, TMultigraph> >
+   : spec_object_traits<is_container> {
+   typedef TGraph masquerade_for;
+   static const bool is_always_const=object_traits<TGraph>::is_always_const || TMultigraph;
+   static const int is_resizeable=object_traits<TGraph>::is_resizeable;
 };
 
-template <typename Graph>
-class WaryGraph : public GenericGraph<Wary<Graph>, typename Graph::dir> {
+template <typename TGraph>
+class WaryGraph : public GenericGraph<Wary<TGraph>, typename TGraph::dir> {
 public:
    int out_degree(int n) const
    {
@@ -598,13 +647,13 @@ public:
          throw std::runtime_error("Graph::edge_exists - node id out of range or deleted");
       return this->top().edge_exists(n1,n2);
    }
-   typename Graph::parallel_edge_iterator all_edges(int n1, int n2)
+   typename TGraph::parallel_edge_iterator all_edges(int n1, int n2)
    {
       if (this->top().invalid_node(n1) || this->top().invalid_node(n2))
          throw std::runtime_error("Graph::all_edges - node id out of range or deleted");
       return this->top().all_edges(n1,n2);
    }
-   typename Graph::parallel_edge_const_iterator all_edges(int n1, int n2) const
+   typename TGraph::parallel_edge_const_iterator all_edges(int n1, int n2) const
    {
       if (this->top().invalid_node(n1) || this->top().invalid_node(n2))
          throw std::runtime_error("Graph::all_edges - node id out of range or deleted");
@@ -633,63 +682,63 @@ public:
       this->top().contract_edge(n1,n2);
    }
 
-   typename Graph::out_edge_list_ref out_edges(int n)
+   typename TGraph::out_edge_list_ref out_edges(int n)
    {
       if (this->top().invalid_node(n))
          throw std::runtime_error("Graph::out_edges - node id out of range or deleted");
       return this->top().out_edges(n);
    }
-   typename Graph::const_out_edge_list_ref out_edges(int n) const
+   typename TGraph::const_out_edge_list_ref out_edges(int n) const
    {
       if (this->top().invalid_node(n))
          throw std::runtime_error("Graph::out_edges - node id out of range or deleted");
       return this->top().out_edges(n);
    }
 
-   typename Graph::in_edge_list_ref in_edges(int n)
+   typename TGraph::in_edge_list_ref in_edges(int n)
    {
       if (this->top().invalid_node(n))
          throw std::runtime_error("Graph::in_edges - node id out of range or deleted");
       return this->top().in_edges(n);
    }
-   typename Graph::const_in_edge_list_ref in_edges(int n) const
+   typename TGraph::const_in_edge_list_ref in_edges(int n) const
    {
       if (this->top().invalid_node(n))
          throw std::runtime_error("Graph::in_edges - node id out of range or deleted");
       return this->top().in_edges(n);
    }
 
-   typename Graph::out_adjacent_node_list_ref out_adjacent_nodes(int n)
+   typename TGraph::out_adjacent_node_list_ref out_adjacent_nodes(int n)
    {
       if (this->top().invalid_node(n))
          throw std::runtime_error("Graph::out_adjacent_nodes - node id out of range or deleted");
       return this->top().out_adjacent_nodes(n);
    }
-   typename Graph::const_out_adjacent_node_list_ref out_adjacent_nodes(int n) const
+   typename TGraph::const_out_adjacent_node_list_ref out_adjacent_nodes(int n) const
    {
       if (this->top().invalid_node(n))
          throw std::runtime_error("Graph::out_adjacent_nodes - node id out of range or deleted");
       return this->top().out_adjacent_nodes(n);
    }
-   typename Graph::in_adjacent_node_list_ref in_adjacent_nodes(int n)
+   typename TGraph::in_adjacent_node_list_ref in_adjacent_nodes(int n)
    {
       if (this->top().invalid_node(n))
          throw std::runtime_error("Graph::in_adjacent_nodes - node id out of range or deleted");
       return this->top().in_adjacent_nodes(n);
    }
-   typename Graph::const_in_adjacent_node_list_ref in_adjacent_nodes(int n) const
+   typename TGraph::const_in_adjacent_node_list_ref in_adjacent_nodes(int n) const
    {
       if (this->top().invalid_node(n))
          throw std::runtime_error("Graph::in_adjacent_nodes - node id out of range or deleted");
       return this->top().in_adjacent_nodes(n);
    }
-   typename Graph::adjacent_node_list_ref adjacent_nodes(int n)
+   typename TGraph::adjacent_node_list_ref adjacent_nodes(int n)
    {
       if (this->top().invalid_node(n))
          throw std::runtime_error("Graph::adjacent_nodes - node id out of range or deleted");
       return this->top().adjacent_nodes(n);
    }
-   typename Graph::const_adjacent_node_list_ref adjacent_nodes(int n) const
+   typename TGraph::const_adjacent_node_list_ref adjacent_nodes(int n) const
    {
       if (this->top().invalid_node(n))
          throw std::runtime_error("Graph::adjacent_nodes - node id out of range or deleted");
@@ -710,17 +759,19 @@ template <typename GraphRef, template <typename> class Iterator>
 class generic_of_GraphComponents {};
 
 template <typename GraphRef, template <typename> class Iterator>
-class GraphComponents : public generic_of_GraphComponents<GraphRef,Iterator> {
+class GraphComponents : public generic_of_GraphComponents<GraphRef, Iterator> {
 protected:
-   alias<GraphRef> graph;
+   using alias_t = alias<GraphRef>;
+   alias_t graph;
 public:
-   typedef typename alias<GraphRef>::arg_type arg_type;
-   typedef typename deref<GraphRef>::type Graph;
-   typename alias<GraphRef>::const_reference get_graph() const { return *graph; }
+   using graph_t = typename deref<GraphRef>::type;
+   decltype(auto) get_graph() const { return *graph; }
 
-   GraphComponents(arg_type G) : graph(G) {}
+   template <typename Arg, typename=std::enable_if_t<std::is_constructible<alias_t, Arg>::value>>
+   explicit GraphComponents(Arg&& graph_arg)
+      : graph(std::forward<Arg>(graph_arg)) {}
 
-   typedef Iterator<Graph> iterator;
+   typedef Iterator<graph_t> iterator;
    typedef iterator const_iterator;
    typedef typename iterator::value_type value_type;
    typedef const value_type reference;
@@ -734,7 +785,8 @@ public:
 };
 
 template <typename GraphRef, template <typename> class Iterator>
-struct spec_object_traits< GraphComponents<GraphRef,Iterator> > : spec_object_traits<is_container> {
+struct spec_object_traits< GraphComponents<GraphRef, Iterator> >
+   : spec_object_traits<is_container> {
    static const bool is_temporary=true, is_lazy=true, is_always_const=true;
 };
 

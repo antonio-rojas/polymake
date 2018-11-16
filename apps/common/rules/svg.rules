@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2016
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -13,7 +13,7 @@
 #  GNU General Public License for more details.
 #-------------------------------------------------------------------------------
 
-REQUIRE
+INCLUDE
    webbrowser.rules
 
 package PmSvg;
@@ -61,6 +61,17 @@ custom $line_width=1;
 # spacing between points (lines) and labels
 custom $text_spacing=3;
 
+# for arrows in directed graphs
+custom $arrowheadlength=15;
+
+# for arrows in directed graphs
+custom $arrowheadwidth=10;
+
+# for arrows in directed graphs
+custom $arrowheadoffset=2*$arrowheadlength;
+
+# for arrows in directed graphs
+custom @arrowheadcolor=(0,0,0);
 
 ###########################################################################################
 #
@@ -85,8 +96,8 @@ or call  reconfigure("common::webbrowser.rules");
 .
    }
    my $self=&_new;
-   #$self->graphics=new Svg::File;
-   $self->tempfile->descend_dir();
+   my $temp_file=new Tempfile;
+   $self->tempfile = $temp_file;
    $self;
 }
 
@@ -113,6 +124,11 @@ label svg
 global_method svg.geometry: draw(Visual::PointSet, @) {
    my ($self, $P)=@_;
    $self->append(PmSvg::PointSet->new($P));
+}
+
+global_method svg.geometry: draw(Visual::Wire, @) {
+   my ($self, $G)=@_;
+   $self->append(PmSvg::Wire->new($G));
 }
 
 global_method svg.geometry: draw(Visual::Polygon, @) {

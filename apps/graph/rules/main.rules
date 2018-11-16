@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -31,7 +31,7 @@ INCLUDE
   graph_properties.rules
   common.rules
   geometric_graph.rules
-  face_lattice.rules
+  lattice.rules
   visual.rules
 
 # self-configuring rules
@@ -44,6 +44,8 @@ INCLUDE
   sketch.rules
   threejs.rules
   tikz.rules
+  svg.rules
+  x3d.rules
 
 # Local Variables:
 # mode: perl

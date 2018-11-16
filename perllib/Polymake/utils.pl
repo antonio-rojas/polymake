@@ -1,4 +1,4 @@
-#  Copyright (c) 1997-2015
+#  Copyright (c) 1997-2018
 #  Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
 #  http://www.polymake.org
 #
@@ -14,8 +14,9 @@
 #-------------------------------------------------------------------------------
 
 use strict;
-
 use namespaces;
+use warnings qw(FATAL void syntax misc);
+
 package Polymake;
 
 sub min($$) {  $_[0]<$_[1] ? $_[0] : $_[1]  }
@@ -63,10 +64,10 @@ sub delete_from_list {  # \@list, numeric scalar or ref => true if deleted
    for (my $i=$#$list; $i>=0; --$i) {
       if ($list->[$i]==$item) {
          splice @$list, $i, 1;
-         return 1;
+         return true;
       }
    }
-   0
+   false
 }
 ####################################################################################
 sub delete_string_from_list {   # \@list, string scalar => true if deleted
@@ -74,26 +75,26 @@ sub delete_string_from_list {   # \@list, string scalar => true if deleted
    for (my $i=$#$list; $i>=0; --$i) {
       if ($list->[$i] eq $item) {
          splice @$list, $i, 1;
-         return 1;
+         return true;
       }
    }
-   0
+   false
 }
 ####################################################################################
 sub contains {          # \@list, numeric scalar or ref => bool
    my ($list, $item)=@_;
    foreach my $elem (@$list) {
-      $elem==$item and return 1;
+      $elem==$item and return true;
    }
-   return 0;
+   return false;
 }
 ####################################################################################
 sub contains_string {           # \@list, scalar => bool
    my ($list, $item)=@_;
    foreach my $elem (@$list) {
-      $elem eq $item and return 1;
+      $elem eq $item and return true;
    }
-   return 0;
+   return false;
 }
 ####################################################################################
 # "string1", "string2" [, "delimiter" ]
@@ -133,9 +134,9 @@ sub equal_lists {
    my $end=@$l1;
    return 0 if $end!=@$l2;
    for (my $i=0; $i<$end; ++$i) {
-       $l1->[$i] == $l2->[$i] or return 0;
+       $l1->[$i] == $l2->[$i] or return false;
    }
-   1
+   true
 }
 
 sub equal_string_lists {
@@ -143,9 +144,9 @@ sub equal_string_lists {
    my $end=@$l1;
    return 0 if $end!=@$l2;
    for (my $i=0; $i<$end; ++$i) {
-       $l1->[$i] eq $l2->[$i] or return 0;
+       $l1->[$i] eq $l2->[$i] or return false;
    }
-   1
+   true
 }
 
 # \list1, start_index1, \list2, start_index2 => length of the equal sequence starting at given positions
@@ -187,7 +188,32 @@ sub equal_list_prefixes2 {
    }
    $ret
 }
+####################################################################################
+sub equal_hashes {
+   my ($h1, $h2)=@_;
+   if (keys(%$h1) == keys(%$h2)) {
+      while (my ($k, $v)=each %$h1) {
+         unless (exists $h2->{$k} and defined($v) ? $h2->{$k}==$v : !defined($h2->{$k})) {
+            keys %$h1;
+            return false;
+         }
+      }
+      true;
+   }
+}
 
+sub equal_string_hashes {
+   my ($h1, $h2)=@_;
+   if (keys(%$h1) == keys(%$h2)) {
+      while (my ($k, $v)=each %$h1) {
+         unless (exists $h2->{$k} and defined($v) ? $h2->{$k} eq $v : !defined($h2->{$k})) {
+            keys %$h1;
+            return false;
+         }
+      }
+      true;
+   }
+}
 ####################################################################################
 sub enforce_nl($) {
    $_[0].="\n" if substr($_[0],-1) ne "\n";
@@ -256,7 +282,6 @@ sub croak {
 
 sub beautify_error {
    unless ($DebugLevel) {
-      namespaces::temp_disable();
       use re 'eval';
       $@ =~ s/ at \(eval \d+\)(?:\[.*?:\d+\])? line 1(\.)?/$1/g;
       $@ =~ s/, <\$?$id_re> line \d+\.//go;
@@ -275,6 +300,16 @@ sub sanitize_help {
    $_[0] =~ s/^\s*\n//s;
    $_[0] =~ s/\n{2,}$/\n/s;
    mark_as_utf8string($_[0]);
+}
+####################################################################################
+# this is a reduced version of Symbol::delete_package which does not delete the package itself
+# used by Configure and ShellHelpers
+sub wipe_package {
+   my ($stash)=@_;
+   foreach my $name (keys %$stash) {
+      undef *{$stash->{$name}};
+   }
+   %$stash=();
 }
 ####################################################################################
 

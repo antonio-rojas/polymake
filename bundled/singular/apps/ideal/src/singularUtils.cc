@@ -1,4 +1,4 @@
-/* Copyright (c) 1997-2015
+/* Copyright (c) 1997-2018
    Ewgenij Gawrilow, Michael Joswig (Technische Universitaet Berlin, Germany)
    http://www.polymake.org
 
@@ -14,7 +14,7 @@
 --------------------------------------------------------------------------------
 */
 
-#include <Singular/libsingular.h>
+#include "polymake/ideal/internal/singularInclude.h"
 
 #include "polymake/client.h"
 #include "polymake/Matrix.h"
@@ -49,7 +49,7 @@ perl::ListReturn singular_get_var(const std::string varname){
             const intvec *iv = (intvec*) IDDATA(var);
             Vector<Integer> pmvec(iv->length());
             int i = 0;
-            for(Entire<Vector<Integer> >::iterator it = entire(pmvec); !it.at_end(); ++it, ++i){
+            for (auto it = entire(pmvec); !it.at_end(); ++it, ++i) {
                *it = (*iv)[i];
             }
             res << pmvec;
@@ -68,11 +68,10 @@ perl::ListReturn singular_get_var(const std::string varname){
          }
       case POLY_CMD:
          {
-            //int n = r.n_vars();
             const poly q = (poly) IDDATA(var);
-            std::pair<ListMatrix<Vector<int> >, std::vector<Rational> > decomposed = convert_poly_to_matrix_and_vector(q);
-            res << decomposed.first;
-            res << decomposed.second;
+            std::pair<std::vector<Rational>, ListMatrix<Vector<int>>> decomposed = convert_poly_to_vector_and_matrix(q);
+            Polynomial<Rational> result(decomposed.first, decomposed.second);
+            res << result;
             break;
          }
       /*
